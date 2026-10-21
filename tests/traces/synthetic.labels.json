@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "video": "synthetic",
+  "durationMs": 20000,
+  "blinks": [
+    {
+      "t": 3083
+    },
+    {
+      "t": 8083
+    },
+    {
+      "t": 13083
+    },
+    {
+      "t": 18083
+    }
+  ],
+  "minF1": 0.99,
+  "meta": {
+    "glasses": false,
+    "lighting": "good",
+    "notes": "generated fixture"
+  }
+}

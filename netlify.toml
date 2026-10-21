@@ -1,0 +1,18 @@
+# Netlify static deploy for the Vite build (no server-side code).
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  # engines requires >= 22.12 (see package.json / AGENTS.md)
+  NODE_VERSION = "22.12.0"
+
+# Cross-origin isolation enables SharedArrayBuffer → MediaPipe's wasm runtime
+# can use threads (faster CPU inference). All assets are same-origin (model +
+# wasm ship in public/), so require-corp is safe here. Verify camera +
+# analysis on the deploy preview before shipping.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cross-Origin-Opener-Policy = "same-origin"
+    Cross-Origin-Embedder-Policy = "require-corp"

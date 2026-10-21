@@ -1,0 +1,35 @@
+{
+  "name": "eye-fatigue-detector",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "eval": "playwright test e2e/accuracy.spec.ts",
+    "eval:trace": "node -e \"globalThis.__evalArgs=process.argv.slice(1);import('vite').then(v=>v.runnerImport('./scripts/eval-trace.ts')).then(()=>process.exit(0),e=>{console.error(e);process.exit(1)})\" --",
+    "postinstall": "node scripts/copy-mediapipe.mjs",
+    "prebuild": "node scripts/copy-mediapipe.mjs"
+  },
+  "dependencies": {
+    "@mediapipe/tasks-vision": "1.1.0",
+    "idb": "8.0.4"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.0",
+    "@sveltejs/vite-plugin-svelte": "6.2.4",
+    "@tsconfig/svelte": "5.0.8",
+    "svelte": "5.57.2",
+    "svelte-check": "4.7.6",
+    "typescript": "5.9.3",
+    "vite": "7.3.7",
+    "vitest": "5.0.4"
+  }
+}
