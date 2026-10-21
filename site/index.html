@@ -3,30 +3,50 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<script>try{var t=localStorage.getItem('blinkwell.theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
 <title>blinkwell — on-device eye fatigue monitor</title>
 <meta name="description" content="blinkwell watches for eye fatigue while you work — periodic 60-second camera windows, fully on-device. No uploads, no accounts.">
 <meta property="og:title" content="blinkwell — on-device eye fatigue monitor">
 <meta property="og:description" content="Periodic 60-second camera windows analyze your blinks and eyelids on-device, then nudge you to break. Nothing ever leaves your machine.">
 <meta property="og:type" content="website">
 <style>
+/* Theme: light-dark() resolves from the element's color-scheme. No data-theme
+   → 'light dark' → follows the OS; data-theme pins it. Browsers without
+   light-dark() (pre-2024) get the body's literal light fallback. */
 :root{
-  --bg:#f6f8fa; --panel:#ffffff; --line:#e4e9ee; --ink:#0f1722; --mut:#5f6b7a;
-  --acc:#0e7a6d; --acc-soft:#e7f4f1; --acc-ink:#0b5f56; --shadow:0 1px 2px rgba(16,24,34,.05);
+  color-scheme:light dark;
+  --bg:light-dark(#f6f8fa,#0d1315); --panel:light-dark(#ffffff,#151e20);
+  --line:light-dark(#e4e9ee,#25333a); --ink:light-dark(#0f1722,#e7eef1);
+  --txt:light-dark(#3c4656,#b8c6cc); --mut:light-dark(#5f6b7a,#8ea0aa);
+  --acc:#0e7a6d; --acc-ink:light-dark(#0b5f56,#55c8b5);
+  --acc-soft:light-dark(#e7f4f1,#112a27); --acc-line:light-dark(#cde8e2,#1d423c);
+  --pitem-ink:light-dark(#234039,#c6e2da);
+  --shadow:light-dark(0 1px 2px rgba(16,24,34,.05),0 1px 2px rgba(0,0,0,.45));
   --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
 }
+:root[data-theme="light"]{color-scheme:light}
+:root[data-theme="dark"]{color-scheme:dark}
 *{box-sizing:border-box;margin:0}
 html,body{overflow-x:hidden}
-body{background:var(--bg);color:var(--ink);font:15px/1.6 var(--sans)}
+body{background:#f6f8fa;background:var(--bg);color:#0f1722;color:var(--ink);font:15px/1.6 var(--sans)}
 a{color:var(--acc-ink)}
 .wrap{max-width:1120px;margin:0 auto;padding:0 24px}
 nav{display:flex;align-items:center;gap:12px 28px;padding:18px 0;flex-wrap:wrap}
 .logo{font:700 19px var(--mono);letter-spacing:-.02em}
-.logo b{color:var(--acc)}
+.logo b{color:var(--acc-ink)}
 nav .links{display:flex;gap:24px;margin-left:auto;font-size:13.5px;color:var(--mut)}
 nav .links a{color:var(--mut);text-decoration:none}
 nav .links a:hover{color:var(--ink)}
 .chip{border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:12px;color:var(--mut);background:var(--panel)}
+.tbtn{border:1px solid var(--line);background:var(--panel);color:var(--mut);border-radius:999px;
+  width:30px;height:30px;padding:0;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.tbtn:hover{color:var(--ink)}
+.tbtn svg{width:15px;height:15px;display:none}
+.tbtn[data-m="system"] .i-auto{display:block}
+.tbtn[data-m="light"] .i-sun{display:block}
+.tbtn[data-m="dark"] .i-moon{display:block}
 @media(max-width:700px){
   nav{gap:12px 16px}
   nav .links{order:3;flex-basis:100%;margin-left:0;gap:8px 16px;font-size:12.5px;flex-wrap:wrap}
@@ -37,8 +57,8 @@ nav .links a:hover{color:var(--ink)}
 .hero>div{min-width:0}
 @media(max-width:880px){.hero{grid-template-columns:1fr;gap:36px;padding:44px 0 28px}}
 h1{font-size:clamp(34px,8vw,68px);line-height:1.03;letter-spacing:-.03em;font-weight:800}
-h1 .o{color:var(--acc)}
-.tag{margin:22px 0 30px;color:#3c4656;font-size:16px;max-width:46ch}
+h1 .o{color:var(--acc-ink)}
+.tag{margin:22px 0 30px;color:var(--txt);font-size:16px;max-width:46ch}
 
 .ptabs{display:inline-flex;background:var(--acc-soft);border-radius:9px;padding:3px;margin-bottom:10px;
   max-width:100%;flex-wrap:wrap}
@@ -63,8 +83,8 @@ h1 .o{color:var(--acc)}
 .tile .v{font-size:36px;font-weight:800;margin-top:auto;letter-spacing:-.02em}
 .tile .v small{font-size:16px;font-weight:700}
 .tile .d{font-size:12px;color:var(--mut);margin-top:4px}
-.tile.hl{border-color:#bfe3dc;background:linear-gradient(180deg,var(--acc-soft),#fff)}
-.tile.hl .v{color:var(--acc)}
+.tile.hl{border-color:var(--acc-line);background:linear-gradient(180deg,var(--acc-soft),var(--panel))}
+.tile.hl .v{color:var(--acc-ink)}
 
 section{padding:56px 0;border-top:1px solid var(--line);margin-top:44px}
 @media(max-width:700px){section{padding:40px 0;margin-top:32px}}
@@ -72,9 +92,9 @@ h2{font-size:12px;letter-spacing:.15em;text-transform:uppercase;color:var(--mut)
 .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
 @media(max-width:880px){.steps{grid-template-columns:1fr}}
 .step{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:22px;box-shadow:var(--shadow)}
-.step .n{color:var(--acc);font:700 12px var(--mono);margin-bottom:12px}
+.step .n{color:var(--acc-ink);font:700 12px var(--mono);margin-bottom:12px}
 .step h3{font-size:15.5px;margin-bottom:8px}
-.step p{font-size:13.5px;color:#3c4656}
+.step p{font-size:13.5px;color:var(--txt)}
 
 .cmds{border:1px solid var(--line);background:var(--panel);border-radius:12px;overflow:hidden;box-shadow:var(--shadow)}
 .cmds .row{display:flex;border-bottom:1px solid var(--line)}
@@ -85,7 +105,7 @@ h2{font-size:12px;letter-spacing:.15em;text-transform:uppercase;color:var(--mut)
 
 .priv{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
 @media(max-width:880px){.priv{grid-template-columns:1fr}}
-.pitem{background:var(--acc-soft);border:1px solid #cde8e2;border-radius:12px;padding:18px 20px;font-size:13.5px;color:#234039}
+.pitem{background:var(--acc-soft);border:1px solid var(--acc-line);border-radius:12px;padding:18px 20px;font-size:13.5px;color:var(--pitem-ink)}
 .pitem b{display:block;margin-bottom:6px;color:var(--acc-ink)}
 .pitem code{font:12px var(--mono)}
 
@@ -104,6 +124,11 @@ footer{padding:36px 0 48px;border-top:1px solid var(--line);margin-top:52px;font
     <a id="ghlink" href="#" rel="noopener">GitHub</a>
   </div>
   <span class="chip">v0.1.2 · MIT</span>
+  <button id="tbtn" class="tbtn" data-m="system" title="Theme: system — click to switch" aria-label="Theme: system — click to switch">
+    <svg class="i-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></svg>
+    <svg class="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+    <svg class="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+  </button>
 </nav>
 
 <div class="hero">
@@ -217,6 +242,29 @@ function pick(p) {
 tabs.forEach(function (b) { b.onclick = function () { pick(b.dataset.p); }; });
 // Auto-detect: Windows browsers get the PowerShell line, everyone else curl|sh.
 pick(/Windows/i.test(navigator.userAgent) ? 'win' : 'unix');
+
+// Theme toggle: cycles system -> light -> dark. 'system' removes the
+// attribute so prefers-color-scheme decides; explicit choices pin it via
+// color-scheme (and persist). The head script above reapplies on load.
+var tbtn = document.getElementById('tbtn');
+var TSEQ = ['system', 'light', 'dark'];
+var tcur = 'system';
+try { var s = localStorage.getItem('blinkwell.theme'); if (s === 'light' || s === 'dark') tcur = s; } catch (e) {}
+function applyTheme(m) {
+  tcur = m;
+  if (m === 'system') {
+    document.documentElement.removeAttribute('data-theme');
+    try { localStorage.removeItem('blinkwell.theme'); } catch (e) {}
+  } else {
+    document.documentElement.dataset.theme = m;
+    try { localStorage.setItem('blinkwell.theme', m); } catch (e) {}
+  }
+  tbtn.dataset.m = m;
+  var lbl = 'Theme: ' + m + ' — click to switch';
+  tbtn.title = lbl; tbtn.setAttribute('aria-label', lbl);
+}
+tbtn.onclick = function () { applyTheme(TSEQ[(TSEQ.indexOf(tcur) + 1) % 3]); };
+applyTheme(tcur);
 
 document.getElementById('copybtn').onclick = function () {
   navigator.clipboard.writeText(cmdEl.textContent);
