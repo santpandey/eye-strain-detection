@@ -145,14 +145,13 @@ footer{padding:36px 0 48px;border-top:1px solid var(--line);margin-top:52px;font
 <section id="commands">
   <h2>Commands</h2>
   <div class="cmds">
-    <div class="row"><code>blinkwell</code><span>no args → "start monitoring? [Y/n]" — simplest possible start</span></div>
-    <div class="row"><code>blinkwell check</code><span>one ~90 s live check — alignment guide, score, verdict, tips</span></div>
-    <div class="row"><code>blinkwell monitor</code><span>the product: periodic windows, reminders, breaks</span></div>
-    <div class="row"><code>blinkwell monitor --interval-min 30</code><span>adjust the cadence — any interval, any window length</span></div>
-    <div class="row"><code>blinkwell history</code><span>terminal dashboard — trends, metric charts, day/half-day grouping</span></div>
-    <div class="row"><code>blinkwell report</code><span>opens a full HTML dashboard of your history in the browser</span></div>
-    <div class="row"><code>blinkwell cameras</code><span>list the cameras your OS sees</span></div>
+    <div class="row"><code>blinkwell</code><span>just this — it asks if you want to start monitoring</span></div>
+    <div class="row"><code>blinkwell check</code><span>checks your eyes once — about 90 seconds</span></div>
+    <div class="row"><code>blinkwell monitor</code><span>checks your eyes every 15 minutes and reminds you to rest</span></div>
+    <div class="row"><code>blinkwell history</code><span>shows your past checks and trends in the terminal</span></div>
+    <div class="row"><code>blinkwell report</code><span>opens a page with charts of all your checks</span></div>
   </div>
+  <p class="hint"><code>blinkwell --help</code> lists every option, including how often and how long checks run.</p>
 </section>
 
 <section id="privacy">
@@ -164,10 +163,11 @@ footer{padding:36px 0 48px;border-top:1px solid var(--line);margin-top:52px;font
     and released immediately — the LED can never silently stay on.</div>
     <div class="pitem"><b>No accounts, no sync.</b>Your baseline and history live
     in your home directory. Delete the folder, everything is gone.</div>
-    <div class="pitem"><b>One honest caveat.</b>The bundled MediaPipe runtime may
-    send anonymous usage-metrics pings to Google — their design, no opt-out,
-    contains no images or input data. Block <code>play.googleapis.com</code> to
-    silence it entirely.</div>
+    <div class="pitem"><b>One honest caveat.</b>The MediaPipe engine may send
+    Google anonymous counters — like which feature ran and how long it took.
+    Your camera frames and results are never sent — they never leave the device.
+    Google's design, no off switch — block <code>play.googleapis.com</code> to
+    silence it.</div>
     <div class="pitem"><b>Wellness tool, not a diagnosis.</b>blinkwell nudges better
     habits; it doesn't detect disease. Persistent symptoms → see a clinician.</div>
   </div>
@@ -188,11 +188,11 @@ var base = /^https?:/.test(location.origin) ? location.origin.replace(/\/$/, '')
 
 var PLATFORMS = {
   win:  { cmd: 'irm ' + base + '/install.ps1 | iex',
-          hint: 'Run in PowerShell — installs to %LOCALAPPDATA%\\blinkwell and adds it to PATH.' },
+          hint: 'Paste into PowerShell and press Enter.' },
   unix: { cmd: 'curl -fsSL ' + base + '/install.sh | sh',
-          hint: 'Run in your terminal — installs to ~/.local/bin. Not on Intel Mac or Linux ARM (use the uv tab).' },
+          hint: 'Paste into your terminal and press Enter.' },
   uv:   { cmd: 'uvx blinkwell',
-          hint: 'One identical command on every OS — needs <a href="https://docs.astral.sh/uv/" rel="noopener">uv</a> (or <code>pipx install blinkwell</code>).' }
+          hint: 'Runs on any OS — needs <a href="https://docs.astral.sh/uv/" rel="noopener">uv</a> installed.' }
 };
 
 var cmdEl = document.getElementById('cmd'), hintEl = document.getElementById('hint');
