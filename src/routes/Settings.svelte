@@ -1,13 +1,6 @@
 <script lang="ts">
   import { clearAll, resetBaseline } from '../lib/storage/db';
   import { isDev, setDev } from '../lib/dev';
-  import {
-    disableNotifications,
-    enableNotifications,
-    notificationPermission,
-    notificationsEnabled,
-    type NotifyPermission,
-  } from '../lib/monitor/notify';
 
   type Theme = 'system' | 'light' | 'dark';
   let theme = $state<Theme>('system');
@@ -17,18 +10,6 @@
   let baselineReset = $state(false);
   let devOn = $state(isDev());
   let advancedOpen = $state(false);
-  let notifyOn = $state(notificationsEnabled());
-  let notifyPerm = $state<NotifyPermission>(notificationPermission());
-
-  async function toggleNotify() {
-    if (notifyOn) {
-      // bind:checked already flipped it — this branch means "turn on".
-      notifyOn = await enableNotifications();
-      notifyPerm = notificationPermission();
-    } else {
-      disableNotifications();
-    }
-  }
 
   function toggleDev() {
     devOn = !devOn;
@@ -86,29 +67,6 @@
         </button>
       {/each}
     </div>
-  </div>
-
-  <div class="card">
-    <h2>Notifications</h2>
-    {#if notifyPerm === 'unsupported'}
-      <p class="muted small">This browser doesn't support notifications.</p>
-    {:else}
-      <label class="row dev-row">
-        <input type="checkbox" bind:checked={notifyOn} onchange={toggleNotify} />
-        <span>
-          <strong>Browser notifications for break reminders</strong><br />
-          <span class="muted small">
-            Reminders always appear in the app while monitoring is on — this also sends an OS
-            notification. Nothing is sent to a server.
-          </span>
-        </span>
-      </label>
-      {#if notifyPerm === 'denied'}
-        <p class="muted small" data-testid="notify-denied">
-          Your browser blocked notifications — enable them in the address-bar/site settings.
-        </p>
-      {/if}
-    {/if}
   </div>
 
   <div class="card">

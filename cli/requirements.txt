@@ -1,0 +1,7 @@
+# Frozen-ish pins — as installed into cli/.venv (Python 3.11, Windows).
+# Re-freeze after upgrades: .venv/Scripts/python.exe -m pip freeze
+mediapipe==0.10.35
+opencv-python==5.0.0.93
+numpy==2.4.6
+plyer==2.1.0
+pytest==9.1.1

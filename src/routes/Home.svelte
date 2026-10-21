@@ -2,8 +2,6 @@
   import { onMount } from 'svelte';
   import { latestSession } from '../lib/storage/db';
   import type { QuickCheckResult } from '../lib/analysis/session';
-  import { monitor as mon } from '../lib/session/monitorSession.svelte';
-  import { clock } from '../lib/session/fileSession.svelte';
   import Icon from '../lib/components/Icon.svelte';
 
   let last = $state<QuickCheckResult | null>(null);
@@ -29,15 +27,6 @@
     return 'good';
   }
 
-  const monitorStatus = $derived(
-    mon.phase === 'waiting'
-      ? `On · next check in ${clock(mon.nextWindowInMs / 1000)}`
-      : mon.phase === 'arming' || mon.phase === 'capturing'
-        ? 'Checking now — camera is on'
-        : mon.phase === 'error'
-          ? `Stopped — ${mon.errorMsg}`
-          : 'Off',
-  );
 </script>
 
 <section class="stack">
@@ -60,31 +49,6 @@
       </div>
     </a>
   {/if}
-
-  <div class="card monitor-card" data-testid="monitor-card">
-    <div class="row" style="justify-content: space-between; width:100%">
-      <h2 style="margin:0">Background monitor</h2>
-      {#if mon.phase !== 'idle'}<span class="chip chip-good">on</span>{/if}
-    </div>
-    <p class="muted small">
-      Every ~15 minutes the camera turns on for about a minute — showing only your eye
-      region — to watch your blink pattern and nudge you toward breaks. The camera is
-      fully off between checks; nothing is recorded or uploaded. Wellness guidance,
-      not a medical diagnosis.
-    </p>
-    <div class="row">
-      {#if mon.phase === 'idle' || mon.phase === 'error'}
-        <button class="btn btn-primary" onclick={() => mon.start()} data-testid="monitor-start">
-          Turn on monitoring
-        </button>
-      {:else}
-        <button class="btn btn-secondary" onclick={() => mon.stop()} data-testid="monitor-stop">
-          Turn off
-        </button>
-        <span class="muted small" data-testid="monitor-status">{monitorStatus}</span>
-      {/if}
-    </div>
-  </div>
 
   <h2>Quick eye-care tips</h2>
   <div class="grid tips">

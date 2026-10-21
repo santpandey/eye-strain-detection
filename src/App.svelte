@@ -1,7 +1,6 @@
 <script lang="ts">
   import Nav from './lib/components/Nav.svelte';
   import MiniPlayer from './lib/components/MiniPlayer.svelte';
-  import MonitorWidget from './lib/components/MonitorWidget.svelte';
   import Home from './routes/Home.svelte';
   import Check from './routes/Check.svelte';
   import History from './routes/History.svelte';
@@ -39,4 +38,3 @@
   {/key}
 </main>
 <MiniPlayer />
-<MonitorWidget />

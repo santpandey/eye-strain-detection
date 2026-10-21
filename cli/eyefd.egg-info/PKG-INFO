@@ -1,0 +1,12 @@
+Metadata-Version: 2.4
+Name: eyefd
+Version: 0.1.0
+Summary: On-device eye-fatigue monitor — local-process port of the web app's analysis pipeline
+Requires-Python: >=3.11
+Requires-Dist: mediapipe<0.11,>=0.10.14
+Requires-Dist: opencv-python<5,>=4.10
+Requires-Dist: numpy<3,>=1.26
+Provides-Extra: notify
+Requires-Dist: plyer>=2.1; extra == "notify"
+Provides-Extra: dev
+Requires-Dist: pytest>=8; extra == "dev"

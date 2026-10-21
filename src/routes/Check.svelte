@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import { cameraErrorMessage, VisionClient } from '../lib/vision/client';
-  import { claimCamera, releaseCamera } from '../lib/cameraLock';
+
   import { guidanceFor as qualityGuidance, QualityCtx, type QualityVerdict } from '../lib/analysis/quality';
   import { QuickCheckAggregator, type QuickCheckResult } from '../lib/analysis/session';
   import { scoreAndLearn, type ScoreView } from '../lib/analysis/scoreSession';
@@ -150,7 +150,6 @@
   }
 
   async function start() {
-    claimCamera(); // hold the camera against the background monitor until teardown
     phase = 'loading';
     errorMsg = '';
     await tick(); // let the video card mount so bind:this assigns videoEl
@@ -288,7 +287,6 @@
   function teardownCamera() {
     clearTimeout(countdownTimer);
     client.destroy();
-    releaseCamera();
   }
 
   onMount(() => {

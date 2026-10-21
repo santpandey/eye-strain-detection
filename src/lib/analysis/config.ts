@@ -101,12 +101,6 @@ export const CFG = {
   distanceWatchCm: 50,
   distanceHighCm: 40,
   lumaWatch: 60,
-  // Background monitor (initial values — no eval coverage yet)
-  monitorIntervalMs: 900_000, // camera-on window every ~15 min
-  monitorWindowMs: 60_000, // each check window runs ~1 min
-  monitorBreakEveryMs: 1_200_000, // 20-20-20 break nudge every ~20 min
-  monitorReminderSnoozeMs: 300_000, // a dismissed reminder stays quiet for ~5 min
-  monitorStartupDelayMs: 3_000, // first window this long after the monitor is switched on
   // Eval (initial value, tune with A5 eval)
   matchTolMs: 150,
   evalTraceTolMs: 300, // default tolerance of scripts/eval-trace.ts (manual labels lag ~220 ms)
