@@ -2,7 +2,7 @@
 #   irm https://<site>/install.ps1 | iex
 $ErrorActionPreference = 'Stop'
 
-$Repo = if ($env:EYEFD_REPO) { $env:EYEFD_REPO } else { 'santpandey/eye-strain-detection' }
+$Repo = if ($env:BLINKWELL_REPO) { $env:BLINKWELL_REPO } else { 'santpandey/eye-strain-detection' }
 
 $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64' }
 $asset = "blinkwell-windows-$arch.zip"

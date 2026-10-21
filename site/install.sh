@@ -4,7 +4,7 @@
 # Downloads the latest release binary for your OS/arch and puts it on PATH.
 set -eu
 
-REPO="${EYEFD_REPO:-santpandey/eye-strain-detection}"
+REPO="${BLINKWELL_REPO:-santpandey/eye-strain-detection}"
 
 os="$(uname -s | tr '[:upper:]' '[:lower:]')"
 arch="$(uname -m)"

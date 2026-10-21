@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>blinkwell — on-device eye fatigue monitor</title>
 <meta name="description" content="blinkwell watches for eye fatigue while you work — periodic 60-second camera windows, fully on-device. No uploads, no accounts.">
+<meta property="og:title" content="blinkwell — on-device eye fatigue monitor">
+<meta property="og:description" content="Periodic 60-second camera windows analyze your blinks and eyelids on-device, then nudge you to break. Nothing ever leaves your machine.">
+<meta property="og:type" content="website">
 <style>
 :root{
   --bg:#f4f1ea; --panel:#fff; --line:#d8d2c4; --ink:#1a1a18; --mut:#6b675c;
@@ -66,7 +69,7 @@ footer{padding:36px 0 48px;border-top:1px solid var(--line);margin-top:52px;font
 <div class="wrap">
 
 <nav>
-  <span class="logo">eye<b>[fd]</b></span>
+  <span class="logo">blink<b>[well]</b></span>
   <div class="links">
     <a href="#how">How it works</a>
     <a href="#privacy">Privacy</a>
@@ -90,7 +93,7 @@ footer{padding:36px 0 48px;border-top:1px solid var(--line);margin-top:52px;font
     </div>
     <div class="alt">
       Windows PowerShell: <code id="ps">irm &lt;site&gt;/install.ps1 | iex</code>
-      &nbsp;·&nbsp; or <code>uvx blinkwell</code> / <code>pipx install blinkwell</code>
+      &nbsp;·&nbsp; or <a href="https://pypi.org/project/blinkwell/" rel="noopener"><code>uvx blinkwell</code></a> / <code>pipx install blinkwell</code>
     </div>
   </div>
 
@@ -98,7 +101,7 @@ footer{padding:36px 0 48px;border-top:1px solid var(--line);margin-top:52px;font
     <div class="tile hl"><span class="k">Frames uploaded</span><span class="v">0</span><span class="d">everything runs on-device</span></div>
     <div class="tile"><span class="k">Camera on</span><span class="v">~7<small>%</small></span><span class="d">60 s window every 15 min — LED off between</span></div>
     <div class="tile"><span class="k">Binary size</span><span class="v" id="binsize">7<small> MB</small></span><span class="d">single file, model embedded</span></div>
-    <div class="tile"><span class="k">Fatigue signals</span><span class="v">4</span><span class="d">eye closure · blink length · reopening · partial blinks</span></div>
+    <div class="tile"><span class="k">Fatigue signals</span><span class="v">8</span><span class="d">blink dynamics · eyelids · partials · distance · lighting</span></div>
     <div class="tile"><span class="k">Personal baseline</span><span class="v">3</span><span class="d">checks until scores are vs. <i>your</i> usual</span></div>
     <div class="tile"><span class="k">Platforms</span><span class="v">3</span><span class="d">Windows · macOS (Apple Silicon) · Linux</span></div>
   </div>
@@ -112,7 +115,8 @@ footer{padding:36px 0 48px;border-top:1px solid var(--line);margin-top:52px;font
       released between windows. Your webcam LED is the honest signal.</p></div>
     <div class="step"><div class="n">02</div><h3>478 landmarks, on-device</h3>
       <p>MediaPipe Face Landmarker runs locally; frames are processed in memory
-      and discarded instantly. Only summary numbers are kept.</p></div>
+      and discarded instantly. Look away mid-check and the clock pauses — only
+      aligned time counts.</p></div>
     <div class="step"><div class="n">03</div><h3>Acts, not just measures</h3>
       <p>When fatigue signals rise vs. your baseline, blinkwell suggests a 20-20-20
       break, palming, or full-blink exercises — timed, guided, optional.</p></div>
@@ -122,11 +126,13 @@ footer{padding:36px 0 48px;border-top:1px solid var(--line);margin-top:52px;font
 <section id="commands">
   <h2>Commands</h2>
   <div class="cmds">
-    <div class="row"><code>blinkwell check</code><span>one ~90 s live check — score, verdict, tips</span></div>
+    <div class="row"><code>blinkwell</code><span>no args → "start monitoring? [Y/n]" — simplest possible start</span></div>
+    <div class="row"><code>blinkwell check</code><span>one ~90 s live check — alignment guide, score, verdict, tips</span></div>
     <div class="row"><code>blinkwell monitor</code><span>the product: periodic windows, reminders, breaks</span></div>
-    <div class="row"><code>blinkwell monitor --interval-min 15</code><span>adjust the cadence</span></div>
-    <div class="row"><code>blinkwell replay video.mp4</code><span>analyze a file instead of the camera (needs ffmpeg)</span></div>
-    <div class="row"><code>blinkwell check --json</code><span>machine-readable output for scripts</span></div>
+    <div class="row"><code>blinkwell monitor --interval-min 30</code><span>adjust the cadence — any interval, any window length</span></div>
+    <div class="row"><code>blinkwell history</code><span>terminal dashboard — trends, metric charts, day/half-day grouping</span></div>
+    <div class="row"><code>blinkwell report</code><span>opens a full HTML dashboard of your history in the browser</span></div>
+    <div class="row"><code>blinkwell cameras</code><span>list the cameras your OS sees</span></div>
   </div>
 </section>
 
@@ -134,7 +140,7 @@ footer{padding:36px 0 48px;border-top:1px solid var(--line);margin-top:52px;font
   <h2>Privacy, by construction</h2>
   <div class="priv">
     <div class="pitem"><b>No frames leave the device.</b>Zero network calls for
-    video. The only file written is <code>~/.blinkwell/history.jsonl</code> — numbers.</div>
+    video. The only file written is <code>~/.eyefd/history.jsonl</code> — numbers.</div>
     <div class="pitem"><b>Camera is on ~7% of the time.</b>It's opened per window
     and released immediately — the LED can never silently stay on.</div>
     <div class="pitem"><b>No accounts, no sync.</b>Your baseline and history live
@@ -149,7 +155,7 @@ footer{padding:36px 0 48px;border-top:1px solid var(--line);margin-top:52px;font
 </section>
 
 <footer>
-  <span>blinkwell — eye fatigue detector · on-device · open source</span>
+  <span>blinkwell — eye fatigue detector · on-device · open source · <a href="https://pypi.org/project/blinkwell/" rel="noopener">PyPI</a></span>
   <span>macOS: Apple Silicon only (Intel → use the pip package) · Linux: x86_64</span>
 </footer>
 </div>
