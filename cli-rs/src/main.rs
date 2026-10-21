@@ -38,13 +38,19 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 )]
 struct Cli {
     #[command(subcommand)]
-    cmd: Cmd,
+    cmd: Option<Cmd>,
 }
 
 #[derive(Subcommand)]
 enum Cmd {
     /// List camera devices the OS reports (for picking --camera).
     Cameras,
+    /// Show recent checks + a score sparkline from ~/.eyefd/history.jsonl.
+    History {
+        /// How many recent sessions to show.
+        #[arg(long, default_value_t = 20)]
+        n: usize,
+    },
     /// Live quick check (camera on for --seconds).
     Check {
         /// Seconds of footage to capture.
@@ -276,13 +282,13 @@ fn run_capture<F>(
     mut run_source: F,
 ) -> Result<(QuickCheckResult, QuickCheckAggregator)>
 where
-    F: FnMut(&mut dyn FnMut(&FrameOut)) -> Result<()>,
+    F: FnMut(&mut dyn FnMut(&FrameOut) -> bool) -> Result<()>,
 {
     let mut agg = QuickCheckAggregator::new();
     let mut last_status = -f64::INFINITY;
     {
         let agg = &mut agg;
-        run_source(&mut |out: &FrameOut| {
+        run_source(&mut |out: &FrameOut| -> bool {
             let f = &out.features;
             if !json_mode && (out.elapsed_ms - last_status >= 5000.0 || out.n == 1) {
                 last_status = out.elapsed_ms;
@@ -298,7 +304,7 @@ where
                 );
                 let _ = std::io::stdout().flush();
             }
-            agg.push(f);
+            agg.push(f)
         })?;
     }
     if !json_mode {
@@ -764,10 +770,74 @@ fn cancel_flag() -> Arc<AtomicBool> {
     .clone()
 }
 
+fn cmd_history(n: usize) -> Result<()> {
+    let mut sessions = storage::list_sessions();
+    if sessions.is_empty() {
+        println!("no saved checks yet — run `eyefd check`");
+        return Ok(());
+    }
+    sessions.sort_by(|a, b| a.started_at.cmp(&b.started_at));
+    let recent: Vec<_> = sessions.iter().rev().take(n).collect();
+    println!("recent checks ({} saved):", sessions.len());
+    for s in recent.iter().rev() {
+        let score = s
+            .fatigue_score
+            .map(|x| format!("{x:.0}"))
+            .unwrap_or_else(|| "—".into());
+        println!(
+            "  {}  score {:>3}  blinks {:>4.1}/min  partial {:>3.0}%  {:?}",
+            s.started_at
+                .get(..16)
+                .unwrap_or(&s.started_at)
+                .replace('T', " "),
+            score,
+            s.blink_rate,
+            s.incomplete_ratio * 100.0,
+            s.confidence
+        );
+    }
+    const SPARK: &[char] = &['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
+    let scores: Vec<f64> = recent
+        .iter()
+        .rev()
+        .filter_map(|s| s.fatigue_score)
+        .collect();
+    if scores.len() >= 2 {
+        let line: String = scores
+            .iter()
+            .map(|x| SPARK[((x / 100.0).clamp(0.0, 1.0) * 7.0).round() as usize])
+            .collect();
+        println!("  fatigue trend (old→new): {line}");
+    }
+    Ok(())
+}
+
 fn main() {
     let cli = Cli::parse();
     let result = match &cli.cmd {
-        Cmd::Cameras => {
+        // Bare `eyefd`: yes/no entry point — no flags to learn.
+        None => {
+            print!("eyefd — start monitoring now? (60 s camera every 15 min) [Y/n] ");
+            let _ = std::io::Write::flush(&mut std::io::stdout());
+            let mut s = String::new();
+            let _ = std::io::stdin().read_line(&mut s);
+            let yes = s.trim().is_empty() || s.trim().eq_ignore_ascii_case("y");
+            if yes {
+                cmd_monitor(
+                    config::MONITOR_INTERVAL_MS / 60_000.0,
+                    config::MONITOR_WINDOW_MS / 1000.0,
+                    config::MONITOR_BREAK_EVERY_MS / 60_000.0,
+                    0,
+                    false,
+                    &None,
+                )
+            } else {
+                println!("nothing started — try `eyefd check` for a one-off, `eyefd --help` for all commands");
+                Ok(())
+            }
+        }
+        Some(Cmd::History { n }) => cmd_history(*n),
+        Some(Cmd::Cameras) => {
             let cams = capture::list_cameras();
             if cams.is_empty() {
                 println!("eyefd: no cameras detected by Windows (check Device Manager → Cameras)");
@@ -778,21 +848,21 @@ fn main() {
             }
             Ok(())
         }
-        Cmd::Check {
+        Some(Cmd::Check {
             seconds,
             camera,
             align_timeout,
             json,
             model,
-        } => cmd_check(*seconds, *camera, *align_timeout, *json, model),
-        Cmd::Monitor {
+        }) => cmd_check(*seconds, *camera, *align_timeout, *json, model),
+        Some(Cmd::Monitor {
             interval_min,
             window_s,
             break_every_min,
             camera,
             json,
             model,
-        } => cmd_monitor(
+        }) => cmd_monitor(
             *interval_min,
             *window_s,
             *break_every_min,
@@ -800,19 +870,19 @@ fn main() {
             *json,
             model,
         ),
-        Cmd::Replay {
+        Some(Cmd::Replay {
             video,
             json,
             model,
             ffmpeg,
-        } => cmd_replay(video, *json, model, ffmpeg),
-        Cmd::Trace {
+        }) => cmd_replay(video, *json, model, ffmpeg),
+        Some(Cmd::Trace {
             traces,
             labels,
             tol,
             json,
             model: _,
-        } => cmd_trace(traces, labels, *tol, *json),
+        }) => cmd_trace(traces, labels, *tol, *json),
     };
     if cancel_flag().load(Ordering::Relaxed) {
         eprintln!("\ninterrupted");

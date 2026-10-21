@@ -344,7 +344,7 @@ pub fn run_camera<F>(
     mut on_frame: F,
 ) -> Result<()>
 where
-    F: FnMut(&FrameOut),
+    F: FnMut(&FrameOut) -> bool,
 {
     let mut cam = open_camera(camera_index)?;
     let t0 = Instant::now();
@@ -370,7 +370,7 @@ where
             };
             let f = process_buffer(engine, &buffer, elapsed_ms)?;
             n += 1;
-            on_frame(&FrameOut {
+            let _ = on_frame(&FrameOut {
                 features: f,
                 n,
                 elapsed_ms,
@@ -441,13 +441,13 @@ fn draw_align_ui(
     hint: &str,
     first: &mut bool,
 ) {
-    const W: usize = 23;
-    const H: usize = 9;
-    // Fixed target box: cols 8..=14, rows 2..=5 of the interior grid.
-    const C0: usize = 8;
-    const C1: usize = 14;
-    const R0: usize = 2;
-    const R1: usize = 5;
+    const W: usize = 45;
+    const H: usize = 15;
+    // Fixed target box: cols 17..=28, rows 4..=10 of the interior grid.
+    const C0: usize = 17;
+    const C1: usize = 28;
+    const R0: usize = 4;
+    const R1: usize = 10;
     // Center the whole block horizontally in the terminal.
     let term_w = terminal_size::terminal_size()
         .map(|(terminal_size::Width(w), _)| w as usize)
@@ -512,7 +512,7 @@ pub fn run_camera_aligned<F>(
     mut on_frame: F,
 ) -> Result<()>
 where
-    F: FnMut(&FrameOut),
+    F: FnMut(&FrameOut) -> bool,
 {
     let mut cam = open_camera(camera_index)?;
     let run = (|| -> Result<()> {
@@ -590,12 +590,19 @@ where
             }
         }
 
-        // ---- phase 2: timed capture --------------------------------------
+        // ---- phase 2: timed capture, pause-gated --------------------------
+        // The clock only advances while frames pass the quality gates: a
+        // misaligned/absent face pauses the session (nothing is fed to the
+        // aggregator) and it resumes when the user is back in position.
+        // `duration_ms` is usable-time; wall time is capped at STRETCH× it.
+        const STRETCH: f64 = 2.5;
         let t0 = Instant::now();
+        let mut last_t = Instant::now();
+        let mut usable_ms = 0.0f64;
         let mut n = 0usize;
         loop {
             let elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
-            if elapsed_ms >= duration_ms {
+            if usable_ms >= duration_ms || elapsed_ms >= duration_ms * STRETCH {
                 break;
             }
             if cancel.as_ref().is_some_and(|c| c.load(Ordering::Relaxed)) {
@@ -610,13 +617,22 @@ where
                     continue;
                 }
             };
+            // features.t keeps real wall time — blink durations stay honest.
             let f = process_buffer(engine, &buffer, elapsed_ms)?;
+            let now = Instant::now();
+            let dt = now.duration_since(last_t).as_secs_f64() * 1000.0;
+            last_t = now;
             n += 1;
-            on_frame(&FrameOut {
+            // FrameOut.elapsed_ms reports *usable* progress for the status
+            // line — it stalls visibly while the session is paused.
+            let accepted = on_frame(&FrameOut {
                 features: f,
                 n,
-                elapsed_ms,
+                elapsed_ms: usable_ms,
             });
+            if accepted {
+                usable_ms += dt;
+            }
         }
         Ok(())
     })();
@@ -730,7 +746,7 @@ pub fn run_video_file<F>(
     mut on_frame: F,
 ) -> Result<()>
 where
-    F: FnMut(&FrameOut),
+    F: FnMut(&FrameOut) -> bool,
 {
     let info = probe_video(ffmpeg, path)?;
     let mut child: Child = Command::new(ffmpeg)
@@ -762,7 +778,7 @@ where
         match engine.process(&buf, info.width, info.height, t) {
             Ok(f) => {
                 i += 1;
-                on_frame(&FrameOut {
+                let _ = on_frame(&FrameOut {
                     features: f,
                     n: i,
                     elapsed_ms: t,

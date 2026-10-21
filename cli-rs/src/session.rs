@@ -181,7 +181,9 @@ impl QuickCheckAggregator {
         self.started_at = Some(iso_now());
     }
 
-    pub fn push(&mut self, f: &FrameFeatures) {
+    /// Push one frame. Returns whether it passed the quality gates —
+    /// capture loops use this to pause the clock on bad footage.
+    pub fn push(&mut self, f: &FrameFeatures) -> bool {
         if self.started_at.is_none() {
             self.begin();
         }
@@ -216,7 +218,7 @@ impl QuickCheckAggregator {
         }
         if !v.ok {
             self.jaw_since = None;
-            return;
+            return false;
         }
         self.detector.push(f);
         self.lumas.push(f.face_luma);
@@ -238,6 +240,7 @@ impl QuickCheckAggregator {
         } else {
             self.jaw_since = None;
         }
+        true
     }
 
     pub fn fps_mean(&self) -> f64 {
