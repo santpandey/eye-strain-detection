@@ -53,6 +53,9 @@ enum Cmd {
         /// Camera index.
         #[arg(long, default_value_t = 0)]
         camera: u32,
+        /// Seconds to spend on face alignment first (0 = skip the guide).
+        #[arg(long, default_value_t = 30.0)]
+        align_timeout: f64,
         /// Machine-readable output lines.
         #[arg(long)]
         json: bool,
@@ -350,7 +353,13 @@ fn finish_result(mut r: QuickCheckResult, json_mode: bool) -> QuickCheckResult {
 
 // ------------------------------------------------------------------ check --
 
-fn cmd_check(seconds: f64, camera: u32, json: bool, model: &Option<PathBuf>) -> Result<()> {
+fn cmd_check(
+    seconds: f64,
+    camera: u32,
+    align_timeout: f64,
+    json: bool,
+    model: &Option<PathBuf>,
+) -> Result<()> {
     let model_path = model_path(model);
     let mut engine = LandmarkerEngine::new(&model_path)?;
     if !json {
@@ -358,10 +367,12 @@ fn cmd_check(seconds: f64, camera: u32, json: bool, model: &Option<PathBuf>) -> 
     }
     let cancel = cancel_flag();
     let (r, _agg) = run_capture(json, "check  ", |on_frame| {
-        capture::run_camera(
+        capture::run_camera_aligned(
             &mut engine,
             camera,
             seconds * 1000.0,
+            align_timeout * 1000.0,
+            !json,
             Some(cancel.clone()),
             on_frame,
         )
@@ -767,9 +778,10 @@ fn main() {
         Cmd::Check {
             seconds,
             camera,
+            align_timeout,
             json,
             model,
-        } => cmd_check(*seconds, *camera, *json, model),
+        } => cmd_check(*seconds, *camera, *align_timeout, *json, model),
         Cmd::Monitor {
             interval_min,
             window_s,

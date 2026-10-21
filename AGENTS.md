@@ -170,6 +170,12 @@ in memory only; only summary metrics persist under `~/.eyefd`
 - `.github/workflows/publish-pypi.yml` — on tag `v*`: `uv build` + `uv
   publish` (PyPI trusted publishing; configure the publisher on PyPI once,
   or set `PYPI_API_TOKEN`). Gives `uvx eyefd` / `pipx install eyefd`.
+- **MediaPipe telemetry (Rust path only)**: libmediapipe from Tasks-C-API
+  wheels ≥ 0.10.30 embeds a Google metrics uploader (play.googleapis.com,
+  no opt-out, fails on desktop, sends no input data). No pre-uploader C
+  API wheel exists, so it can't be pinned away — documented in
+  cli-rs/README.md + site/index.html; users can firewall-block the host.
+  Python CLI (0.10.21) and the web wasm path are telemetry-free.
 - **Parity gate**: after touching `cli-rs/src/{config,features,quality,blink,
   session,thresholds,eval,baseline,score}.rs`, re-run
   `npm run eval:trace -- tests/traces/synthetic.trace.json tests/traces/synthetic.labels.json`

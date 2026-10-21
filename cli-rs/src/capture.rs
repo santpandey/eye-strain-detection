@@ -314,6 +314,25 @@ fn open_camera(camera_index: u32) -> Result<nokhwa::Camera> {
         .context(format!("could not open camera {camera_index}"))
 }
 
+/// Decode one camera buffer and run the landmarker on it.
+fn process_buffer(
+    engine: &mut LandmarkerEngine,
+    buffer: &nokhwa::Buffer,
+    elapsed_ms: f64,
+) -> Result<crate::features::FrameFeatures> {
+    let res = buffer.resolution();
+    let img = buffer
+        .decode_image::<nokhwa::pixel_format::RgbFormat>()
+        .context("decode camera frame")?;
+    let rgb = img.into_raw();
+    engine.process(
+        &rgb,
+        res.width() as usize,
+        res.height() as usize,
+        elapsed_ms,
+    )
+}
+
 /// Call `on_frame(FrameOut)` for each camera frame for `duration_ms` of wall
 /// time. The camera is created here and always dropped on return (webcam LED
 /// off). `cancel` stops the loop early.
@@ -349,13 +368,7 @@ where
                     continue;
                 }
             };
-            let res = buffer.resolution();
-            let img = buffer
-                .decode_image::<nokhwa::pixel_format::RgbFormat>()
-                .context("decode camera frame")?;
-            let (w, h) = (res.width() as usize, res.height() as usize);
-            let rgb = img.into_raw();
-            let f = engine.process(&rgb, w, h, elapsed_ms)?;
+            let f = process_buffer(engine, &buffer, elapsed_ms)?;
             n += 1;
             on_frame(&FrameOut {
                 features: f,
@@ -367,6 +380,229 @@ where
     })();
     let _ = cam.stop_stream();
     drop(cam); // MSMF releases the device here → LED off
+    run
+}
+
+// ------------------------------------------------------------- alignment --
+
+/// Target zone for alignment, in normalized eye-midpoint coordinates.
+/// X is image-space (unmirrored): image-left is the user's right side.
+const ALIGN_CX: (f64, f64) = (0.40, 0.60);
+const ALIGN_CY: (f64, f64) = (0.30, 0.55);
+/// Eye separation as a fraction of frame width — the distance proxy.
+const ALIGN_SIZE: (f64, f64) = (0.10, 0.30);
+/// Consecutive-aligned time required before the check starts.
+const ALIGN_HOLD_MS: u64 = 1_000;
+
+fn align_ok(face: bool, cx: f64, cy: f64, size: f64) -> bool {
+    face && cx >= ALIGN_CX.0
+        && cx <= ALIGN_CX.1
+        && cy >= ALIGN_CY.0
+        && cy <= ALIGN_CY.1
+        && size >= ALIGN_SIZE.0
+        && size <= ALIGN_SIZE.1
+}
+
+fn align_hint(face: bool, cx: f64, cy: f64, size: f64) -> String {
+    if !face {
+        return "look at the camera".into();
+    }
+    let mut h = Vec::new();
+    if cx < ALIGN_CX.0 {
+        h.push("move left");
+    } else if cx > ALIGN_CX.1 {
+        h.push("move right");
+    }
+    if cy < ALIGN_CY.0 {
+        h.push("move down");
+    } else if cy > ALIGN_CY.1 {
+        h.push("move up");
+    }
+    if size < ALIGN_SIZE.0 {
+        h.push("come closer");
+    } else if size > ALIGN_SIZE.1 {
+        h.push("step back");
+    }
+    if h.is_empty() {
+        "aligned — hold still".into()
+    } else {
+        h.join(" · ")
+    }
+}
+
+/// Draw the alignment boundary box in place (11 lines) using ANSI cursor
+/// control. `first` controls whether we move the cursor up before redrawing.
+fn draw_align_ui(
+    face: bool,
+    cx: f64,
+    cy: f64,
+    ok: bool,
+    held_s: f64,
+    hint: &str,
+    first: &mut bool,
+) {
+    const W: usize = 23;
+    const H: usize = 9;
+    // Fixed target box: cols 8..=14, rows 2..=5 of the interior grid.
+    const C0: usize = 8;
+    const C1: usize = 14;
+    const R0: usize = 2;
+    const R1: usize = 5;
+    let fc = (cx * (W - 1) as f64).round().clamp(0.0, (W - 1) as f64) as usize;
+    let fr = (cy * (H - 1) as f64).round().clamp(0.0, (H - 1) as f64) as usize;
+
+    let mut lines = Vec::with_capacity(H + 4);
+    lines.push("      align your face inside the frame".to_string());
+    lines.push(format!("      ┌{}┐", "─".repeat(W)));
+    for r in 0..H {
+        let mut row = [' '; W];
+        if r == R0 || r == R1 {
+            for ch in row.iter_mut().take(C1 + 1).skip(C0) {
+                *ch = '─';
+            }
+        }
+        if (R0..=R1).contains(&r) {
+            row[C0] = '│';
+            row[C1] = '│';
+            if r == R0 {
+                row[C0] = '┌';
+                row[C1] = '┐';
+            } else if r == R1 {
+                row[C0] = '└';
+                row[C1] = '┘';
+            }
+        }
+        if face && r == fr {
+            row[fc] = if ok { 'O' } else { 'o' };
+        }
+        lines.push(format!("      │{}│", row.iter().collect::<String>()));
+    }
+    lines.push(format!("      └{}┘", "─".repeat(W)));
+    lines.push(format!("      {hint:<40} {held_s:.1}/1.0 s"));
+
+    if !*first {
+        print!("\x1b[{}A", lines.len());
+    }
+    for l in &lines {
+        println!("\x1b[2K{l}");
+    }
+    let _ = std::io::Write::flush(&mut std::io::stdout());
+    *first = false;
+}
+
+/// Like `run_camera`, but runs a face-alignment phase inside the same camera
+/// session first: an ASCII boundary box with directional hints, drawn in place.
+/// When the face holds inside the zone for `ALIGN_HOLD_MS` (or
+/// `align_timeout_ms` elapses), the box is erased and capture begins. LED stays
+/// on continuously — one camera session, no flicker.
+pub fn run_camera_aligned<F>(
+    engine: &mut LandmarkerEngine,
+    camera_index: u32,
+    duration_ms: f64,
+    align_timeout_ms: f64,
+    draw_ui: bool,
+    cancel: Option<Arc<AtomicBool>>,
+    mut on_frame: F,
+) -> Result<()>
+where
+    F: FnMut(&FrameOut),
+{
+    let mut cam = open_camera(camera_index)?;
+    let run = (|| -> Result<()> {
+        // ---- phase 1: alignment (not scored) ------------------------------
+        if align_timeout_ms > 0.0 {
+            let t0 = Instant::now();
+            let mut first_draw = true;
+            let mut aligned_since: Option<Instant> = None;
+            let mut drew = false;
+            while t0.elapsed().as_secs_f64() * 1000.0 < align_timeout_ms {
+                if aligned_since.is_some_and(|t| t.elapsed().as_millis() as u64 >= ALIGN_HOLD_MS)
+                    || cancel.as_ref().is_some_and(|c| c.load(Ordering::Relaxed))
+                {
+                    break;
+                }
+                let Ok(buffer) = cam.frame() else {
+                    continue;
+                };
+                let f = process_buffer(engine, &buffer, t0.elapsed().as_secs_f64() * 1000.0)?;
+                let (face, cx, cy, size) = if f.face {
+                    let cx = (f.eye_centers[0][0] + f.eye_centers[1][0]) / 2.0;
+                    let cy = (f.eye_centers[0][1] + f.eye_centers[1][1]) / 2.0;
+                    let size = if f.frame_w > 0.0 {
+                        f.interocular_px / f.frame_w
+                    } else {
+                        0.0
+                    };
+                    (true, cx, cy, size)
+                } else {
+                    (false, 0.0, 0.0, 0.0)
+                };
+                let ok = align_ok(face, cx, cy, size);
+                if ok && aligned_since.is_none() {
+                    aligned_since = Some(Instant::now());
+                } else if !ok {
+                    aligned_since = None;
+                }
+                if draw_ui {
+                    drew = true;
+                    let held_s = aligned_since
+                        .map(|t| t.elapsed().as_secs_f64())
+                        .unwrap_or(0.0);
+                    draw_align_ui(
+                        face,
+                        cx,
+                        cy,
+                        ok,
+                        held_s,
+                        &align_hint(face, cx, cy, size),
+                        &mut first_draw,
+                    );
+                }
+            }
+            if drew {
+                // Erase the 11-line UI, then report — the box must not linger
+                // and distract during the actual capture.
+                print!("\x1b[11A\x1b[J");
+                if aligned_since.is_some() {
+                    println!("aligned — capture starting (LED stays on)");
+                } else {
+                    println!("couldn't confirm alignment — capturing anyway");
+                }
+            }
+        }
+
+        // ---- phase 2: timed capture --------------------------------------
+        let t0 = Instant::now();
+        let mut n = 0usize;
+        loop {
+            let elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
+            if elapsed_ms >= duration_ms {
+                break;
+            }
+            if cancel.as_ref().is_some_and(|c| c.load(Ordering::Relaxed)) {
+                break;
+            }
+            let buffer = match cam.frame() {
+                Ok(b) => b,
+                Err(e) => {
+                    if n == 0 {
+                        return Err(e).context("camera frame read failed");
+                    }
+                    continue;
+                }
+            };
+            let f = process_buffer(engine, &buffer, elapsed_ms)?;
+            n += 1;
+            on_frame(&FrameOut {
+                features: f,
+                n,
+                elapsed_ms,
+            });
+        }
+        Ok(())
+    })();
+    let _ = cam.stop_stream();
+    drop(cam);
     run
 }
 

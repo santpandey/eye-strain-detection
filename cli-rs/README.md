@@ -27,6 +27,18 @@ while a check/window runs and is released immediately after (Windows Media
 Foundation shows the LED exactly then). Between monitor windows the LED is
 off and nothing from the camera is buffered.
 
+**Known caveat — MediaPipe telemetry.** The `libmediapipe` native library
+(any Tasks-C-API wheel ≥ 0.10.30, including the 0.10.35 the `mediapipe`
+crate fetches) contains an embedded Google usage-metrics uploader
+(`portable_clearcut_uploader`) that periodically attempts connections to
+`play.googleapis.com`. Google provides no opt-out; their stated mitigation
+is to block the host. No frames or input data are ever sent — the payload
+is anonymous API-usage metrics, and on desktop the upload typically fails
+anyway (`FAILED_PRECONDITION`). For a strict zero-network guarantee, block
+`play.googleapis.com` in your firewall. The Python CLI (`cli/`, pinned to
+`mediapipe==0.10.21` which predates the uploader) is telemetry-free, as is
+the web app (wasm path).
+
 ## Setup
 
 ```sh
