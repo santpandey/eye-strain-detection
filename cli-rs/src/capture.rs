@@ -271,6 +271,17 @@ pub struct FrameOut {
     pub elapsed_ms: f64,
 }
 
+/// Enumerate camera devices the OS reports — what `--camera N` indexes mean.
+pub fn list_cameras() -> Vec<String> {
+    match nokhwa::query(nokhwa::utils::ApiBackend::Auto) {
+        Ok(cams) => cams
+            .iter()
+            .map(|c| format!("{} — {}", c.index(), c.human_name()))
+            .collect(),
+        Err(_) => Vec::new(),
+    }
+}
+
 /// Open a camera by index: try 640×480@30 MJPEG first (what the app asks
 /// for), then the camera's highest-rate mode, then anything.
 fn open_camera(camera_index: u32) -> Result<nokhwa::Camera> {

@@ -43,6 +43,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
+    /// List camera devices the OS reports (for picking --camera).
+    Cameras,
     /// Live quick check (camera on for --seconds).
     Check {
         /// Seconds of footage to capture.
@@ -751,6 +753,17 @@ fn cancel_flag() -> Arc<AtomicBool> {
 fn main() {
     let cli = Cli::parse();
     let result = match &cli.cmd {
+        Cmd::Cameras => {
+            let cams = capture::list_cameras();
+            if cams.is_empty() {
+                println!("eyefd: no cameras detected by Windows (check Device Manager → Cameras)");
+            } else {
+                for c in &cams {
+                    println!("{c}");
+                }
+            }
+            Ok(())
+        }
         Cmd::Check {
             seconds,
             camera,
