@@ -10,3 +10,7 @@ eval-data/
 test-results/
 playwright-report/
 .devin/
+cli/.venv/
+cli/**/__pycache__/
+*.egg-info/
+cli-rs/target/
