@@ -40,7 +40,7 @@ const EYE_H: usize = 24;
 
 /// Model resolution: `--model` > exe_dir/models/ (bundle layout) > repo
 /// checkout > embedded copy written to the user cache dir. The embedded
-/// fallback makes a lone `eyefd` binary fully self-contained.
+/// fallback makes a lone `blinkwell` binary fully self-contained.
 static EMBEDDED_MODEL: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../public/models/face_landmarker.task"
@@ -61,11 +61,11 @@ pub fn default_model_path() -> PathBuf {
     if p.exists() {
         return p;
     }
-    // …last resort: extract the embedded model to <cache>/eyefd/models/.
+    // …last resort: extract the embedded model to <cache>/blinkwell/models/.
     let cache = directories::BaseDirs::new()
         .map(|d| d.cache_dir().to_path_buf())
         .unwrap_or_else(std::env::temp_dir)
-        .join("eyefd")
+        .join("blinkwell")
         .join("models");
     let _ = std::fs::create_dir_all(&cache);
     let p = cache.join("face_landmarker.task");

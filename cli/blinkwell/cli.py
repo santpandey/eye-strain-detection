@@ -1,4 +1,4 @@
-"""eyefd CLI — the app's analysis pipeline as a local process.
+"""blinkwell CLI — the app's analysis pipeline as a local process.
 
 Commands:
   check    live quick check (camera on for --seconds, then the result card)
@@ -182,7 +182,7 @@ def cmd_check(args) -> int:
     try:
         if not args.json:
             print(
-                f"eyefd check — camera on for {seconds:.0f} s (webcam light on = honest signal)"
+                f"blinkwell check — camera on for {seconds:.0f} s (webcam light on = honest signal)"
             )
         try:
             r, _ = _run_capture(
@@ -209,7 +209,7 @@ def cmd_replay(args) -> int:
     engine = LandmarkerEngine(_model_path(args))
     try:
         if not args.json:
-            print(f"eyefd replay — {args.video} (file source: distance n/a)")
+            print(f"blinkwell replay — {args.video} (file source: distance n/a)")
         try:
             r, _ = _run_capture(
                 engine,
@@ -246,7 +246,7 @@ def cmd_monitor(args) -> int:
     snoozed_until: dict = {}
     if not args.json:
         print(
-            f"eyefd monitor — {args.window_s:g} s camera window every {args.interval_min:g} min"
+            f"blinkwell monitor — {args.window_s:g} s camera window every {args.interval_min:g} min"
             f" (break nudge every {args.break_every_min:g} min). Ctrl+C to stop."
         )
         print("  camera LED is ON only while a window runs — that's the honest signal.")
@@ -414,7 +414,7 @@ def cmd_trace(args) -> int:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
-        prog="eyefd",
+        prog="blinkwell",
         description="On-device eye-fatigue monitor — the web app's analysis pipeline as a local process.",
     )
     sub = ap.add_subparsers(dest="cmd", required=True)

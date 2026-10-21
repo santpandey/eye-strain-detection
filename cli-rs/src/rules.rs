@@ -1,5 +1,5 @@
 //! Monitor reminder rules — port of src/lib/analysis/monitorRules.ts (logic
-//! preserved via the Python reference port, cli/eyefd/monitorRules.py).
+//! preserved via the Python reference port, cli/blinkwell/monitorRules.py).
 //!
 //! At most one reminder per kind is ever returned by a single evaluation.
 

@@ -24,28 +24,28 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-      - name: Build eyefd
+      - name: Build blinkwell
         run: cargo build --release --manifest-path cli-rs/Cargo.toml --target ${{ matrix.target }}
       - name: Package (unix)
         if: runner.os != 'Windows'
         run: |
           cd cli-rs/target/${{ matrix.target }}/release
-          strip eyefd || true
-          tar -czvf $GITHUB_WORKSPACE/eyefd-${{ matrix.name }}.tar.gz eyefd
+          strip blinkwell || true
+          tar -czvf $GITHUB_WORKSPACE/blinkwell-${{ matrix.name }}.tar.gz blinkwell
       - name: Package (windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          Compress-Archive -Path cli-rs/target/${{ matrix.target }}/release/eyefd.exe `
-            -DestinationPath eyefd-${{ matrix.name }}.zip
+          Compress-Archive -Path cli-rs/target/${{ matrix.target }}/release/blinkwell.exe `
+            -DestinationPath blinkwell-${{ matrix.name }}.zip
       - name: Publish release + assets
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: eyefd-${{ matrix.name }}.*
+          files: blinkwell-${{ matrix.name }}.*
       - name: Upload artifact (workflow_dispatch)
         if: github.ref_type != 'tag'
         uses: actions/upload-artifact@v4
         with:
-          name: eyefd-${{ matrix.name }}
-          path: eyefd-${{ matrix.name }}.*
+          name: blinkwell-${{ matrix.name }}
+          path: blinkwell-${{ matrix.name }}.*

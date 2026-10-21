@@ -2,10 +2,10 @@
 
 import pytest
 
-from eyefd.config import CFG
-from eyefd.eval import match_blinks
-from eyefd.session import QuickCheckAggregator, assess_confidence, poisson_interval
-from eyefd.thresholds import assess, overall_verdict
+from blinkwell.config import CFG
+from blinkwell.eval import match_blinks
+from blinkwell.session import QuickCheckAggregator, assess_confidence, poisson_interval
+from blinkwell.thresholds import assess, overall_verdict
 
 from helpers import frame, make_result, reset_clock
 

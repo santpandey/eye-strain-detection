@@ -1,6 +1,6 @@
 //! Guided eye-rest exercises offered by background-monitor reminders.
 //! Pure data — reimplemented from the product summary (look-far 20 s,
-//! full-blinks ~30 s, palming 30 s); matches cli/eyefd/exercises.py.
+//! full-blinks ~30 s, palming 30 s); matches cli/blinkwell/exercises.py.
 
 #[derive(Debug, Clone, Copy)]
 pub struct Exercise {

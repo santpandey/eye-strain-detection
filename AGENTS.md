@@ -44,7 +44,7 @@ summary metrics (`QuickCheckResult`) are stored, in IndexedDB.
 ## Python CLI (cli/)
 
 A faithful port of the analysis layer to a local process — no browser, no
-hidden-tab problem. `cli/eyefd/` mirrors the TS modules 1:1 (`config.py`,
+hidden-tab problem. `cli/blinkwell/` mirrors the TS modules 1:1 (`config.py`,
 `features.py`, `quality.py`, `blink.py`, `session.py`, `thresholds.py`,
 `baseline.py`, `fatigueScore.py`, `eval.py`); `monitorRules.py`,
 `exercises.py`, `notify.py` are ports of the removed in-browser monitor
@@ -57,17 +57,17 @@ CLI-owned (deleted from config.ts). Process-side plumbing is `capture.py`
 - Setup: `cd cli && py -3.11 -m venv .venv && .venv/Scripts/activate && pip install -r requirements.txt`
   (or `pip install -e .`; mediapipe is hard-pinned to 0.10.21 — later builds
   ship a native telemetry uploader that attempts network calls).
-- Commands: `eyefd check [--seconds 90] [--camera 0]`, `eyefd monitor
+- Commands: `blinkwell check [--seconds 90] [--camera 0]`, `blinkwell monitor
   [--interval-min 15] [--window-s 60] [--break-every-min 20]` (camera LED on
-  only during windows — VideoCapture released between them), `eyefd replay
-  <video>` (source 'file', distance n/a), `eyefd trace <trace.json>
+  only during windows — VideoCapture released between them), `blinkwell replay
+  <video>` (source 'file', distance n/a), `blinkwell trace <trace.json>
   [--labels <labels.json>] [--tol 300]` (parity with `npm run eval:trace`).
   `--json` gives machine-readable lines.
-- Parity check: `cli/.venv/Scripts/python.exe -m eyefd trace
+- Parity check: `cli/.venv/Scripts/python.exe -m blinkwell trace
   tests/traces/synthetic.trace.json --labels tests/traces/synthetic.labels.json`
   must reproduce `npm run eval:trace` event-for-event (verified F1-identical on
   synthetic + two eval-data diag traces).
-- **Keep `cli/eyefd/config.py` in sync with `src/lib/analysis/config.ts`** —
+- **Keep `cli/blinkwell/config.py` in sync with `src/lib/analysis/config.ts`** —
   every CFG constant was copied verbatim.
 - Tests: `cli/.venv/Scripts/python.exe -m pytest cli/tests` (pytest; mirrors
   tests/blink.test.ts + session.test.ts).
@@ -78,14 +78,14 @@ Software WebGL (SwiftShader/llvmpipe/etc., e.g. headless Chromium) → CPU.
 Firefox → CPU. Otherwise GPU, then a one-time GPU-vs-CPU latency benchmark
 keeps the faster (CPU must be < 0.8× GPU median). A GPU that finds no face
 for 45 frames / 3 s falls back to CPU. Choices persist in localStorage
-`eyefd.delegate` as `{delegate, renderer, at, reason}` and are ignored when the
+`blinkwell.delegate` as `{delegate, renderer, at, reason}` and are ignored when the
 renderer string changes.
 
 ## Tuning & developer tools
 
 - All numeric thresholds live in `src/lib/analysis/config.ts` ("initial value,
   tune with A5 eval").
-- Dev mode: localStorage `eyefd.dev=1`, Settings → Advanced → Developer tools,
+- Dev mode: localStorage `blinkwell.dev=1`, Settings → Advanced → Developer tools,
   or `?dev=1`. Enables the "Download trace" button (numbers only) and the
   `#/dev/label` route (blink labeling; `B` marks, Backspace undoes).
 - `tests/traces/*.trace.json` + sibling `*.labels.json` are replayed by
@@ -132,7 +132,7 @@ tests/                           # vitest unit tests (synthetic FrameFeatures @3
 - Later steps (not built yet): PWA/service worker, redness analysis (pilot in
   `e2e/redness-pilot.spec.ts`), charts, Rust/PyInstaller packaging.
 
-## cli-rs/ — the Rust monitor CLI (`eyefd`)
+## cli-rs/ — the Rust monitor CLI (`blinkwell`)
 
 Windows-first Rust port of the whole pipeline for background monitoring:
 camera → MediaPipe FaceLandmarker (`mediapipe` crate, CPU/XNNPACK) →
@@ -145,11 +145,11 @@ subprocess — not bundled), `trace` (offline parity harness for
 in memory only; only summary metrics persist under `~/.eyefd`
 (`EYEFD_HOME` overrides for tests).
 
-- Build: `cargo build -p eyefd --release` (inside `cli-rs/` it's just
-  `cargo build --release`; the crate is a standalone package named `eyefd`).
+- Build: `cargo build -p blinkwell --release` (inside `cli-rs/` it's just
+  `cargo build --release`; the crate is a standalone package named `blinkwell`).
 - Needs `face_landmarker.task` (`--model`, `models/` beside the exe, or the
   repo's `public/models/` copy — else the copy embedded via `include_bytes!`
-  is written to `<cache>/eyefd/models/`) and a libmediapipe native library
+  is written to `<cache>/blinkwell/models/`) and a libmediapipe native library
   (auto-downloaded from the official PyPI wheel on first run;
   `MEDIAPIPE_LIB` or a `libmediapipe.dll` beside the exe overrides).
 
@@ -158,7 +158,7 @@ in memory only; only summary metrics persist under `~/.eyefd`
 - `site/` is the public brochure (px0-style): `index.html`, `install.sh`,
   `install.ps1`. Netlify publishes `site/` only (netlify.toml); the Vite app
   is a local harness and is NOT published.
-- `site/install.{sh,ps1}` download `eyefd-<os>-<arch>.{tar.gz,zip}` from
+- `site/install.{sh,ps1}` download `blinkwell-<os>-<arch>.{tar.gz,zip}` from
   `github.com/<REPO>/releases/latest/download/` — set the `REPO`/`$Repo`
   constant (and the `OWNER/REPO` link in site/index.html) once the GitHub
   repo exists. Single-file install: the binary embeds the model, and the
@@ -169,7 +169,7 @@ in memory only; only summary metrics persist under `~/.eyefd`
   linux-arm64 have no PyPI wheel → those users use the pip package.
 - `.github/workflows/publish-pypi.yml` — on tag `v*`: `uv build` + `uv
   publish` (PyPI trusted publishing; configure the publisher on PyPI once,
-  or set `PYPI_API_TOKEN`). Gives `uvx eyefd` / `pipx install eyefd`.
+  or set `PYPI_API_TOKEN`). Gives `uvx blinkwell` / `pipx install blinkwell`.
 - **MediaPipe telemetry (Rust path only)**: libmediapipe from Tasks-C-API
   wheels ≥ 0.10.30 embeds a Google metrics uploader (play.googleapis.com,
   no opt-out, fails on desktop, sends no input data). No pre-uploader C
@@ -179,12 +179,12 @@ in memory only; only summary metrics persist under `~/.eyefd`
 - **Parity gate**: after touching `cli-rs/src/{config,features,quality,blink,
   session,thresholds,eval,baseline,score}.rs`, re-run
   `npm run eval:trace -- tests/traces/synthetic.trace.json tests/traces/synthetic.labels.json`
-  and `cargo run -p eyefd -- trace tests/traces/synthetic.trace.json --labels tests/traces/synthetic.labels.json`
+  and `cargo run -p blinkwell -- trace tests/traces/synthetic.trace.json --labels tests/traces/synthetic.labels.json`
   (same for `eval-data/diag-20261020_152808-chromium.json` +
   `eval-data/20261020_152808.labels.json`) and confirm identical event lists
   and TP/FP/FN.
 - **`cli-rs/src/config.rs` must stay synchronized with
-  `src/lib/analysis/config.ts` and `cli/eyefd/config.py`** — the header
+  `src/lib/analysis/config.ts` and `cli/blinkwell/config.py`** — the header
   comment says the same. Names match the TS (`PROM_START` = `promStart`).
 - `cli-rs/tests/blink.rs` ports `tests/blink.test.ts`; keep new detector
   behaviors covered in both places.

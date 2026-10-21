@@ -1,7 +1,7 @@
 //! Central tuning knobs. Every numeric threshold in the analysis pipeline
 //! lives here. All values are initial values — tune with the A5 accuracy eval.
 //!
-//! Keep in sync with src/lib/analysis/config.ts and cli/eyefd/config.py —
+//! Keep in sync with src/lib/analysis/config.ts and cli/blinkwell/config.py —
 //! this is a 1:1 port. The monitor* knobs moved out of config.ts when the
 //! web monitor was cut; the CLI owns monitoring now, so they live here.
 

@@ -1,4 +1,4 @@
-//! eyefd — on-device eye-fatigue monitor: the web app's analysis pipeline as
+//! blinkwell — on-device eye-fatigue monitor: the web app's analysis pipeline as
 //! a local process.
 //!
 //! Commands:
@@ -10,18 +10,19 @@
 //!            score it against labels (parity tool for scripts/eval-trace.ts)
 
 use anyhow::{Context, Result};
+use blinkwell::capture::{self, FrameOut, LandmarkerEngine};
+use blinkwell::config;
+use blinkwell::eval::match_blinks;
+use blinkwell::exercises::exercise;
+use blinkwell::features::FrameFeatures;
+use blinkwell::quality::guidance_for;
+use blinkwell::report;
+use blinkwell::rules::{evaluate_reminders, MonitorRuleState};
+use blinkwell::score::{score_and_learn, FatigueScoreOut};
+use blinkwell::session::{Confidence, QuickCheckAggregator, QuickCheckResult, Source};
+use blinkwell::storage;
+use blinkwell::thresholds::{Status, DISCLAIMER};
 use clap::{Parser, Subcommand};
-use eyefd::capture::{self, FrameOut, LandmarkerEngine};
-use eyefd::config;
-use eyefd::eval::match_blinks;
-use eyefd::exercises::exercise;
-use eyefd::features::FrameFeatures;
-use eyefd::quality::guidance_for;
-use eyefd::rules::{evaluate_reminders, MonitorRuleState};
-use eyefd::score::{score_and_learn, FatigueScoreOut};
-use eyefd::session::{Confidence, QuickCheckAggregator, QuickCheckResult, Source};
-use eyefd::storage;
-use eyefd::thresholds::{Status, DISCLAIMER};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::io::Write;
@@ -32,7 +33,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[derive(Parser)]
 #[command(
-    name = "eyefd",
+    name = "blinkwell",
     version,
     about = "On-device eye-fatigue monitor — the web app's analysis pipeline as a local process."
 )]
@@ -51,6 +52,8 @@ enum Cmd {
         #[arg(long, default_value_t = 20)]
         n: usize,
     },
+    /// Generate + open an HTML dashboard of your history (charts, filters).
+    Report,
     /// Live quick check (camera on for --seconds).
     Check {
         /// Seconds of footage to capture.
@@ -150,7 +153,7 @@ fn print_result_card(r: &QuickCheckResult, score_out: Option<&FatigueScoreOut>, 
     let st = &r.statuses;
     let bar = "─".repeat(52);
     println!("{bar}");
-    println!("  {}", eyefd::thresholds::overall_verdict(st));
+    println!("  {}", blinkwell::thresholds::overall_verdict(st));
     if let Some(out) = score_out {
         if let Some(score) = out.score {
             let anchor = if out.baseline_ready {
@@ -372,7 +375,9 @@ fn cmd_check(
     let model_path = model_path(model);
     let mut engine = LandmarkerEngine::new(&model_path)?;
     if !json {
-        println!("eyefd check — camera on for {seconds:.0} s (webcam light on = honest signal)");
+        println!(
+            "blinkwell check — camera on for {seconds:.0} s (webcam light on = honest signal)"
+        );
     }
     let cancel = cancel_flag();
     let (r, _agg) = run_capture(json, "check  ", |on_frame| {
@@ -400,14 +405,14 @@ fn cmd_replay(
     ffmpeg: &Option<PathBuf>,
 ) -> Result<()> {
     let ffmpeg = capture::find_ffmpeg(ffmpeg.as_deref()).context(
-        "ffmpeg not found — `eyefd replay` decodes video through `ffmpeg -f rawvideo`.\n\
+        "ffmpeg not found — `blinkwell replay` decodes video through `ffmpeg -f rawvideo`.\n\
          Install ffmpeg (on PATH) or pass --ffmpeg <path>.",
     )?;
     let model_path = model_path(model);
     let mut engine = LandmarkerEngine::new(&model_path)?;
     if !json {
         println!(
-            "eyefd replay — {} (file source: distance n/a)",
+            "blinkwell replay — {} (file source: distance n/a)",
             video.display()
         );
     }
@@ -428,7 +433,7 @@ struct JsonReminder<'a> {
     #[serde(rename = "type")]
     kind: &'a str,
     #[serde(flatten)]
-    reminder: &'a eyefd::rules::Reminder,
+    reminder: &'a blinkwell::rules::Reminder,
 }
 
 #[derive(Serialize)]
@@ -469,7 +474,7 @@ fn cmd_monitor(
 
     if !json {
         println!(
-            "eyefd monitor — {window_s:.0} s camera window every {interval_min:.0} min \
+            "blinkwell monitor — {window_s:.0} s camera window every {interval_min:.0} min \
              (break nudge every {break_every_min:.0} min). Ctrl+C to stop."
         );
         println!("  camera LED is ON only while a window runs — that's the honest signal.");
@@ -578,7 +583,7 @@ fn cmd_monitor(
                     }
                 }
             }
-            eyefd::notify::send_notification(&c.title, &c.body);
+            blinkwell::notify::send_notification(&c.title, &c.body);
         }
 
         // Between-window countdown line every ~30 s.
@@ -646,7 +651,7 @@ struct JsonTraceOut<'a> {
     #[serde(rename = "type")]
     kind: &'a str,
     trace: String,
-    events: &'a [eyefd::blink::BlinkEvent],
+    events: &'a [blinkwell::blink::BlinkEvent],
     quality_ms: f64,
     gaze_down_discards: usize,
     asymmetric_discards: usize,
@@ -773,7 +778,7 @@ fn cancel_flag() -> Arc<AtomicBool> {
 fn cmd_history(n: usize) -> Result<()> {
     let mut sessions = storage::list_sessions();
     if sessions.is_empty() {
-        println!("no saved checks yet — run `eyefd check`");
+        println!("no saved checks yet — run `blinkwell check`");
         return Ok(());
     }
     sessions.sort_by(|a, b| a.started_at.cmp(&b.started_at));
@@ -815,9 +820,9 @@ fn cmd_history(n: usize) -> Result<()> {
 fn main() {
     let cli = Cli::parse();
     let result = match &cli.cmd {
-        // Bare `eyefd`: yes/no entry point — no flags to learn.
+        // Bare `blinkwell`: yes/no entry point — no flags to learn.
         None => {
-            print!("eyefd — start monitoring now? (60 s camera every 15 min) [Y/n] ");
+            print!("blinkwell — start monitoring now? (60 s camera every 15 min) [Y/n] ");
             let _ = std::io::Write::flush(&mut std::io::stdout());
             let mut s = String::new();
             let _ = std::io::stdin().read_line(&mut s);
@@ -832,15 +837,21 @@ fn main() {
                     &None,
                 )
             } else {
-                println!("nothing started — try `eyefd check` for a one-off, `eyefd --help` for all commands");
+                println!("nothing started — try `blinkwell check` for a one-off, `blinkwell --help` for all commands");
                 Ok(())
             }
         }
         Some(Cmd::History { n }) => cmd_history(*n),
+        Some(Cmd::Report) => report::build_report().map(|path| {
+            println!("blinkwell: report written to {}", path.display());
+            report::open_report(&path);
+        }),
         Some(Cmd::Cameras) => {
             let cams = capture::list_cameras();
             if cams.is_empty() {
-                println!("eyefd: no cameras detected by Windows (check Device Manager → Cameras)");
+                println!(
+                    "blinkwell: no cameras detected by Windows (check Device Manager → Cameras)"
+                );
             } else {
                 for c in &cams {
                     println!("{c}");
@@ -891,7 +902,7 @@ fn main() {
     match result {
         Ok(()) => {}
         Err(e) => {
-            eprintln!("eyefd: {e:#}");
+            eprintln!("blinkwell: {e:#}");
             std::process::exit(1);
         }
     }

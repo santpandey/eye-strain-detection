@@ -4,9 +4,9 @@ import math
 
 import pytest
 
-from eyefd.blink import BlinkDetector, time_at_or_above
-from eyefd.config import CFG
-from eyefd.quality import QualityCtx
+from blinkwell.blink import BlinkDetector, time_at_or_above
+from blinkwell.config import CFG
+from blinkwell.quality import QualityCtx
 
 from helpers import (
     closed,

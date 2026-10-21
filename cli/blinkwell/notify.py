@@ -11,7 +11,7 @@ def send_notification(title: str, body: str) -> None:
     try:
         from plyer import notification
 
-        notification.notify(title=title, message=body, app_name="eyefd", timeout=10)
+        notification.notify(title=title, message=body, app_name="blinkwell", timeout=10)
         return
     except Exception:
         pass

@@ -1,4 +1,4 @@
-# eyefd — eye-fatigue monitor CLI
+# blinkwell — eye-fatigue monitor CLI
 
 The [Eye Fatigue Detector](../README.md) web app's analysis pipeline as a local
 process — no browser, no hidden-tab problem. Webcam → MediaPipe Face
@@ -21,17 +21,17 @@ pip install -e .
 pip install -r requirements.txt
 ```
 
-`eyefd` is then on PATH inside the venv; `python -m eyefd` works too.
+`blinkwell` is then on PATH inside the venv; `python -m blinkwell` works too.
 The face model is the repo's own `public/models/face_landmarker.task` —
 nothing is downloaded.
 
 ## Commands
 
 ```bat
-eyefd check --seconds 90 --camera 0     :: live quick check → result card
-eyefd monitor --interval-min 15 --window-s 60 --break-every-min 20
-eyefd replay <video>                    :: run a video file through the pipeline
-eyefd trace <trace.json> --labels <labels.json> [--tol 300]
+blinkwell check --seconds 90 --camera 0     :: live quick check → result card
+blinkwell monitor --interval-min 15 --window-s 60 --break-every-min 20
+blinkwell replay <video>                    :: run a video file through the pipeline
+blinkwell trace <trace.json> --labels <labels.json> [--tol 300]
 ```
 
 - `check` — camera on for `--seconds`, then the result card (verdict, fatigue
@@ -54,7 +54,7 @@ eyefd trace <trace.json> --labels <labels.json> [--tol 300]
 - `--json` on `check`/`monitor`/`replay`/`trace` prints machine-readable
   lines (one JSON object per result/window/reminder/trace).
 
-Data lives at `~/.eyefd/`: `baseline.json` (per-metric reservoirs + median) and
+Data lives at `~/.blinkwell/`: `baseline.json` (per-metric reservoirs + median) and
 `history.jsonl` (one saved result per line). Set `EYEFD_HOME` to relocate.
 
 ## Your webcam light
@@ -68,7 +68,7 @@ light visibly turns off.
 
 Same rule as the app: no frames or images ever leave the device or get
 persisted. Only summary metrics (`QuickCheckResult` JSON) are written, to
-`~/.eyefd/` on your own disk. The face-landmarker model loads from a local
+`~/.blinkwell/` on your own disk. The face-landmarker model loads from a local
 file; the code makes no network calls. (mediapipe is pinned at 0.10.21 —
 later builds embed a native telemetry uploader that *attempts* upload;
 0.10.21 has no such uploader.)
@@ -85,7 +85,7 @@ The CLI's detector output was verified event-for-event against
 `npm run eval:trace` on `tests/traces/synthetic.trace.json` (4/4 events,
 F1 1.000) and two real `eval-data/diag-*` traces (F1 identical to the TS
 pipeline: 0.710 and 0.370). When `config.ts` is retuned, edit
-`cli/eyefd/config.py` to match — the module header says so too.
+`cli/blinkwell/config.py` to match — the module header says so too.
 
 ## Dev
 
@@ -96,5 +96,5 @@ pipeline: 0.710 and 0.370). When `config.ts` is retuned, edit
 Layout mirrors the TS modules: `config.py features.py quality.py blink.py
 session.py thresholds.py baseline.py fatigueScore.py monitorRules.py
 exercises.py eval.py` are 1:1 ports; `capture.py` (cv2 + mediapipe),
-`storage.py` (~/.eyefd), `scoreSession.py`, `notify.py`, `cli.py` are
+`storage.py` (~/.blinkwell), `scoreSession.py`, `notify.py`, `cli.py` are
 process-side plumbing.

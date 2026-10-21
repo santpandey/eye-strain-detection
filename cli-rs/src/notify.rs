@@ -8,7 +8,7 @@ pub fn send_notification(title: &str, body: &str) {
         notify_rust::Notification::new()
             .summary(title)
             .body(body)
-            .appname("eyefd")
+            .appname("blinkwell")
             .timeout(notify_rust::Timeout::Milliseconds(10_000))
             .show()
             .is_ok()

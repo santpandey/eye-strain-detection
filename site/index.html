@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>eyefd — on-device eye fatigue monitor</title>
-<meta name="description" content="eyefd watches for eye fatigue while you work — periodic 60-second camera windows, fully on-device. No uploads, no accounts.">
+<title>blinkwell — on-device eye fatigue monitor</title>
+<meta name="description" content="blinkwell watches for eye fatigue while you work — periodic 60-second camera windows, fully on-device. No uploads, no accounts.">
 <style>
 :root{
   --bg:#f4f1ea; --panel:#fff; --line:#d8d2c4; --ink:#1a1a18; --mut:#6b675c;
@@ -79,7 +79,7 @@ footer{padding:36px 0 48px;border-top:1px solid var(--line);margin-top:52px;font
 <div class="hero">
   <div>
     <h1>Your eyes are<br>tired. <span class="o">Prove it.</span></h1>
-    <p class="tag">eyefd is an on-device eye-fatigue monitor. Every ~15 minutes it opens
+    <p class="tag">blinkwell is an on-device eye-fatigue monitor. Every ~15 minutes it opens
     your camera for a 60-second check — blink dynamics, eyelid closure, partial
     blinks — then tells you when it's time for a break and what to do about it.
     Nothing ever leaves your machine.</p>
@@ -90,7 +90,7 @@ footer{padding:36px 0 48px;border-top:1px solid var(--line);margin-top:52px;font
     </div>
     <div class="alt">
       Windows PowerShell: <code id="ps">irm &lt;site&gt;/install.ps1 | iex</code>
-      &nbsp;·&nbsp; or <code>uvx eyefd</code> / <code>pipx install eyefd</code>
+      &nbsp;·&nbsp; or <code>uvx blinkwell</code> / <code>pipx install blinkwell</code>
     </div>
   </div>
 
@@ -114,7 +114,7 @@ footer{padding:36px 0 48px;border-top:1px solid var(--line);margin-top:52px;font
       <p>MediaPipe Face Landmarker runs locally; frames are processed in memory
       and discarded instantly. Only summary numbers are kept.</p></div>
     <div class="step"><div class="n">03</div><h3>Acts, not just measures</h3>
-      <p>When fatigue signals rise vs. your baseline, eyefd suggests a 20-20-20
+      <p>When fatigue signals rise vs. your baseline, blinkwell suggests a 20-20-20
       break, palming, or full-blink exercises — timed, guided, optional.</p></div>
   </div>
 </section>
@@ -122,11 +122,11 @@ footer{padding:36px 0 48px;border-top:1px solid var(--line);margin-top:52px;font
 <section id="commands">
   <h2>Commands</h2>
   <div class="cmds">
-    <div class="row"><code>eyefd check</code><span>one ~90 s live check — score, verdict, tips</span></div>
-    <div class="row"><code>eyefd monitor</code><span>the product: periodic windows, reminders, breaks</span></div>
-    <div class="row"><code>eyefd monitor --interval-min 15</code><span>adjust the cadence</span></div>
-    <div class="row"><code>eyefd replay video.mp4</code><span>analyze a file instead of the camera (needs ffmpeg)</span></div>
-    <div class="row"><code>eyefd check --json</code><span>machine-readable output for scripts</span></div>
+    <div class="row"><code>blinkwell check</code><span>one ~90 s live check — score, verdict, tips</span></div>
+    <div class="row"><code>blinkwell monitor</code><span>the product: periodic windows, reminders, breaks</span></div>
+    <div class="row"><code>blinkwell monitor --interval-min 15</code><span>adjust the cadence</span></div>
+    <div class="row"><code>blinkwell replay video.mp4</code><span>analyze a file instead of the camera (needs ffmpeg)</span></div>
+    <div class="row"><code>blinkwell check --json</code><span>machine-readable output for scripts</span></div>
   </div>
 </section>
 
@@ -134,7 +134,7 @@ footer{padding:36px 0 48px;border-top:1px solid var(--line);margin-top:52px;font
   <h2>Privacy, by construction</h2>
   <div class="priv">
     <div class="pitem"><b>No frames leave the device.</b>Zero network calls for
-    video. The only file written is <code>~/.eyefd/history.jsonl</code> — numbers.</div>
+    video. The only file written is <code>~/.blinkwell/history.jsonl</code> — numbers.</div>
     <div class="pitem"><b>Camera is on ~7% of the time.</b>It's opened per window
     and released immediately — the LED can never silently stay on.</div>
     <div class="pitem"><b>No accounts, no sync.</b>Your baseline and history live
@@ -143,13 +143,13 @@ footer{padding:36px 0 48px;border-top:1px solid var(--line);margin-top:52px;font
     send anonymous usage-metrics pings to Google — their design, no opt-out,
     contains no images or input data. Block <code>play.googleapis.com</code> to
     silence it entirely.</div>
-    <div class="pitem"><b>Wellness tool, not a diagnosis.</b>eyefd nudges better
+    <div class="pitem"><b>Wellness tool, not a diagnosis.</b>blinkwell nudges better
     habits; it doesn't detect disease. Persistent symptoms → see a clinician.</div>
   </div>
 </section>
 
 <footer>
-  <span>eyefd — eye fatigue detector · on-device · open source</span>
+  <span>blinkwell — eye fatigue detector · on-device · open source</span>
   <span>macOS: Apple Silicon only (Intel → use the pip package) · Linux: x86_64</span>
 </footer>
 </div>

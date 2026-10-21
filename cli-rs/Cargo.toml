@@ -1,16 +1,16 @@
 [package]
-name = "eyefd"
+name = "blinkwell"
 version = "0.1.0"
 edition = "2021"
 description = "On-device eye-fatigue monitor — the web app's analysis pipeline as a local process"
 license = "Apache-2.0"
 
 [lib]
-name = "eyefd"
+name = "blinkwell"
 path = "src/lib.rs"
 
 [[bin]]
-name = "eyefd"
+name = "blinkwell"
 path = "src/main.rs"
 
 [dependencies]

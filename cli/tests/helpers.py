@@ -12,7 +12,7 @@ def reset_clock():
 
 def frame(over: dict | None = None):
     """A quality, eyes-open frame. Overrides simulate blinks etc."""
-    from eyefd.features import FrameFeatures
+    from blinkwell.features import FrameFeatures
 
     _t[0] += DT
     kw = dict(
