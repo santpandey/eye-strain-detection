@@ -1,9 +1,0 @@
-mediapipe<0.11,>=0.10.14
-opencv-python<5,>=4.10
-numpy<3,>=1.26
-
-[dev]
-pytest>=8
-
-[notify]
-plyer>=2.1

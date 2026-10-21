@@ -1,0 +1,30 @@
+[package]
+name = "eyefd"
+version = "0.1.0"
+edition = "2021"
+description = "On-device eye-fatigue monitor — the web app's analysis pipeline as a local process"
+license = "Apache-2.0"
+
+[lib]
+name = "eyefd"
+path = "src/lib.rs"
+
+[[bin]]
+name = "eyefd"
+path = "src/main.rs"
+
+[dependencies]
+mediapipe = "0.1"
+nokhwa = { version = "0.10", features = ["input-native"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+clap = { version = "4", features = ["derive"] }
+anyhow = "1"
+directories = "6"
+ctrlc = "3"
+notify-rust = "4"
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1

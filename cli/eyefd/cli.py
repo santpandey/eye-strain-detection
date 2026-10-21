@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import sys
 import time
@@ -374,6 +375,7 @@ def cmd_trace(args) -> int:
             print(json.dumps(out))
             continue
 
+        _ms = lambda x: f"{math.floor(x + 0.5):>6}"
         print(
             f"\n=== {name}  ({len(det.events)} events, quality {det.quality_ms / 1000:.2f} s, "
             f"discards g{det.gaze_down_discards}/a{det.asymmetric_discards})"
@@ -382,7 +384,7 @@ def cmd_trace(args) -> int:
         for e in det.events:
             kind = "complete LONG" if e.complete and e.longClosure else ("complete" if e.complete else "incomplete")
             print(
-                f"{e.start:7.0f} {e.end:7.0f}  {e.peak:.2f}  {e.rest:.2f}  {e.closedMs:7.0f}  {kind}"
+                f"{_ms(e.start)} {_ms(e.end)}  {e.peak:.2f}  {e.rest:.2f}  {_ms(e.closedMs)}  {kind}"
             )
         if labels is not None:
             m = match_blinks(det.events, labels, det.quality_ms / 60000, tol)
@@ -392,9 +394,9 @@ def cmd_trace(args) -> int:
             )
             for lm in m["labelMatches"]:
                 if lm["event"] is None:
-                    print(f"  MISS label {lm['t']:.0f}")
+                    print(f"  MISS label {_ms(lm['t'])}")
             for e in m["unmatchedEvents"]:
-                print(f"  FP event {e.start:.0f}–{e.end:.0f} peak {e.peak:.2f}")
+                print(f"  FP event {_ms(e.start)}–{_ms(e.end)} peak {e.peak:.2f}")
         print_result_card(r, None)
     return 1 if any_fail else 0
 
@@ -424,4 +426,26 @@ def main(argv=None) -> int:
     common(p)
     p.set_defaults(fn=cmd_monitor)
 
-    p = sub.add_parser("replay", help="run a video file through the same p
+    p = sub.add_parser("replay", help="run a video file through the same pipeline")
+    p.add_argument("video")
+    common(p)
+    p.set_defaults(fn=cmd_replay)
+
+    p = sub.add_parser("trace", help="replay a recorded trace JSON (+ optional labels scoring)")
+    p.add_argument("traces", nargs="+", help="trace JSON file(s)")
+    p.add_argument("--labels", default=None, help="labels JSON (.labels.json)")
+    p.add_argument("--tol", type=float, default=CFG.evalTraceTolMs)
+    common(p)
+    p.set_defaults(fn=cmd_trace)
+
+    args = ap.parse_args(argv)
+    _fix_console_encoding()
+    try:
+        return args.fn(args)
+    except KeyboardInterrupt:
+        print("\ninterrupted", file=sys.stderr)
+        return 130
+
+
+if __name__ == "__main__":
+    sys.exit(main())
