@@ -108,7 +108,7 @@ class _Cfg:
     # Background monitor — CLI-owned. These five were removed from config.ts
     # when the in-browser monitor was deleted (monitoring lives in the CLI
     # now); values carried over verbatim.
-    monitorIntervalMs = 900_000  # camera-on window every ~15 min
+    monitorIntervalMs = 600_000  # camera-on window every ~10 min
     monitorWindowMs = 60_000  # each check window runs ~1 min
     monitorBreakEveryMs = 1_200_000  # 20-20-20 break nudge every ~20 min
     monitorReminderSnoozeMs = 300_000  # a dismissed reminder stays quiet for ~5 min

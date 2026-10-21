@@ -7,7 +7,7 @@ throttle.
 
 ```
 blinkwell check     live quick check (camera on ~90 s, then the result card)
-blinkwell monitor   periodic ~60 s camera windows every ~15 min, reminders
+blinkwell monitor   periodic ~60 s camera windows every ~10 min, reminders
 blinkwell replay    run a video file through the same pipeline
 blinkwell trace     replay a recorded trace JSON, score it against labels
 ```

@@ -122,7 +122,7 @@ pub const LUMA_WATCH: f64 = 60.0;
 
 /// Background monitor (the CLI owns monitoring; these were removed from
 /// config.ts when the in-app monitor was cut).
-pub const MONITOR_INTERVAL_MS: f64 = 900_000.0; // camera-on window every ~15 min
+pub const MONITOR_INTERVAL_MS: f64 = 600_000.0; // camera-on window every ~10 min
 pub const MONITOR_WINDOW_MS: f64 = 60_000.0; // each check window runs ~1 min
 pub const MONITOR_BREAK_EVERY_MS: f64 = 1_200_000.0; // 20-20-20 break nudge every ~20 min
 pub const MONITOR_REMINDER_SNOOZE_MS: f64 = 300_000.0; // a dismissed reminder stays quiet ~5 min

@@ -3,7 +3,7 @@
 //!
 //! Commands:
 //!   check    live quick check (camera on for --seconds, then the result card)
-//!   monitor  periodic ~60 s camera windows every ~15 min; camera LED is ON
+//!   monitor  periodic ~60 s camera windows every ~10 min; camera LED is ON
 //!            only during a window — between windows the device is released
 //!   replay   run a video file through the same pipeline (source 'file')
 //!   trace    replay a recorded trace JSON through the Rust pipeline and
@@ -982,7 +982,7 @@ fn main() {
     let result = match &cli.cmd {
         // Bare `blinkwell`: yes/no entry point — no flags to learn.
         None => {
-            print!("blinkwell — start monitoring now? (60 s camera every 15 min) [Y/n] ");
+            print!("blinkwell — start monitoring now? (60 s camera every 10 min) [Y/n] ");
             let _ = std::io::Write::flush(&mut std::io::stdout());
             let mut s = String::new();
             let _ = std::io::stdin().read_line(&mut s);

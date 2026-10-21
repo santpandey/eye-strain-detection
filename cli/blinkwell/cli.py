@@ -2,7 +2,7 @@
 
 Commands:
   check    live quick check (camera on for --seconds, then the result card)
-  monitor  periodic ~60 s camera windows every ~15 min; camera LED is ON only
+  monitor  periodic ~60 s camera windows every ~10 min; camera LED is ON only
            during a window — between windows cv2.VideoCapture is released
   replay   run a video file through the same pipeline (source 'file')
   trace    replay a recorded trace JSON through the Python pipeline and score
