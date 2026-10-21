@@ -183,15 +183,15 @@ footer{padding:36px 0 48px;border-top:1px solid var(--line);margin-top:52px;font
 // The install scripts live on this site, so the command follows whatever
 // origin the visitor is on (incl. a future custom domain). SITE_URL is the
 // Netlify domain — the fallback for local file:// previews.
-var SITE_URL = 'https://glistening-sunburst-d79e51.netlify.app';
+var SITE_URL = 'https://blinkwell.netlify.app';
 var base = /^https?:/.test(location.origin)
   ? location.origin.replace(/\/$/, '')
   : SITE_URL;
 
 var PLATFORMS = {
-  win:  { cmd: 'irm ' + base + '/install.ps1 | iex',
+  win:  { cmd: 'irm ' + base + '/i.ps1 | iex',
           hint: 'Paste into PowerShell and press Enter.' },
-  unix: { cmd: 'curl -fsSL ' + base + '/install.sh | sh',
+  unix: { cmd: 'curl -fsSL ' + base + '/i | sh',
           hint: 'Paste into your terminal and press Enter.' },
   uv:   { cmd: 'uvx blinkwell',
           hint: 'Runs on any OS — needs <a href="https://docs.astral.sh/uv/" rel="noopener">uv</a> installed.' }

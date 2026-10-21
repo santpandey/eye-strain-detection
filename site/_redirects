@@ -1,0 +1,4 @@
+# Short install URLs shown in index.html's install box.
+# Status 200 = rewrite (content served at the short path, no redirect hop).
+/i      /install.sh    200
+/i.ps1  /install.ps1   200
