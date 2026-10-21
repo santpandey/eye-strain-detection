@@ -57,7 +57,7 @@ pub fn build_report() -> Result<PathBuf> {
 }
 
 /// Open the report in the default browser (best-effort).
-pub fn open_report(path: &PathBuf) {
+pub fn open_report(path: &std::path::Path) {
     #[cfg(windows)]
     let _ = std::process::Command::new("cmd")
         .args(["/c", "start", "", &path.to_string_lossy()])

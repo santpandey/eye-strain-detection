@@ -46,11 +46,22 @@ struct Cli {
 enum Cmd {
     /// List camera devices the OS reports (for picking --camera).
     Cameras,
-    /// Show recent checks + a score sparkline from ~/.eyefd/history.jsonl.
+    /// Terminal dashboard of saved checks: stats, metric bars, filters.
+    /// Same data as `report` — no browser needed.
     History {
-        /// How many recent sessions to show.
+        /// How many recent groups/sessions to show.
         #[arg(long, default_value_t = 20)]
         n: usize,
+        /// Only sessions from the last N days (0 = all).
+        #[arg(long, default_value_t = 0)]
+        days: u32,
+        /// Group bars by: session | halfday | day.
+        #[arg(long, default_value = "session")]
+        group: String,
+        /// Metric to chart: score | blinks | partial | perclos | blinkms |
+        /// reopen | dist | usable.
+        #[arg(long, default_value = "score")]
+        metric: String,
     },
     /// Generate + open an HTML dashboard of your history (charts, filters).
     Report,
@@ -775,44 +786,193 @@ fn cancel_flag() -> Arc<AtomicBool> {
     .clone()
 }
 
-fn cmd_history(n: usize) -> Result<()> {
+const METRICS: &[(&str, &str, &str)] = &[
+    // (flag, label, unit)
+    ("score", "fatigue score", ""),
+    ("blinks", "blink rate", "/min"),
+    ("partial", "partial-blink share", "%"),
+    ("perclos", "PERCLOS", "%"),
+    ("blinkms", "mean blink duration", "ms"),
+    ("reopen", "lid reopen share", "%"),
+    ("dist", "screen distance", "cm"),
+    ("usable", "usable capture", "s"),
+];
+
+fn metric_val(s: &QuickCheckResult, m: &str) -> Option<f64> {
+    match m {
+        "score" => s.fatigue_score,
+        "blinks" => Some(s.blink_rate),
+        "partial" => Some(s.incomplete_ratio * 100.0),
+        "perclos" => Some(s.perclos * 100.0),
+        "blinkms" => Some(s.mean_blink_ms),
+        "reopen" => Some(s.mean_reopen_frac * 100.0),
+        "dist" => Some(s.distance_cm),
+        "usable" => Some(s.quality_ms / 1000.0),
+        _ => None,
+    }
+}
+
+fn local_dt(s: &str) -> Option<chrono::DateTime<chrono::Local>> {
+    chrono::DateTime::parse_from_rfc3339(s)
+        .ok()
+        .map(|d| d.with_timezone(&chrono::Local))
+}
+
+/// Group key + display label, matching report.html's grouping.
+fn group_key(s: &QuickCheckResult, group: &str) -> (String, String) {
+    let Some(dt) = local_dt(&s.started_at) else {
+        let k = s.started_at.get(..16).unwrap_or(&s.started_at).to_string();
+        return (k.clone(), k);
+    };
+    match group {
+        "day" => (
+            dt.format("%Y-%m-%d").to_string(),
+            dt.format("%m-%d").to_string(),
+        ),
+        "halfday" => {
+            let am = dt.format("%p").to_string() == "AM";
+            (
+                format!("{} {}", dt.format("%Y-%m-%d"), if am { "AM" } else { "PM" }),
+                format!("{} {}", dt.format("%m-%d"), if am { "AM" } else { "PM" }),
+            )
+        }
+        _ => (
+            s.started_at.clone(),
+            dt.format("%Y-%m-%d %H:%M").to_string(),
+        ),
+    }
+}
+
+fn cmd_history(n: usize, days: u32, group: &str, metric: &str) -> Result<()> {
+    if !["session", "halfday", "day"].contains(&group) {
+        anyhow::bail!("unknown --group '{group}' — use session | halfday | day");
+    }
+    let Some(&(metric_key, metric_label, unit)) = METRICS.iter().find(|(k, ..)| *k == metric)
+    else {
+        anyhow::bail!(
+            "unknown --metric '{metric}' — use {}",
+            METRICS.iter().map(|m| m.0).collect::<Vec<_>>().join(" | ")
+        );
+    };
+
     let mut sessions = storage::list_sessions();
     if sessions.is_empty() {
         println!("no saved checks yet — run `blinkwell check`");
         return Ok(());
     }
     sessions.sort_by(|a, b| a.started_at.cmp(&b.started_at));
-    let recent: Vec<_> = sessions.iter().rev().take(n).collect();
-    println!("recent checks ({} saved):", sessions.len());
-    for s in recent.iter().rev() {
-        let score = s
-            .fatigue_score
-            .map(|x| format!("{x:.0}"))
-            .unwrap_or_else(|| "—".into());
-        println!(
-            "  {}  score {:>3}  blinks {:>4.1}/min  partial {:>3.0}%  {:?}",
-            s.started_at
-                .get(..16)
-                .unwrap_or(&s.started_at)
-                .replace('T', " "),
-            score,
-            s.blink_rate,
-            s.incomplete_ratio * 100.0,
-            s.confidence
+    if days > 0 {
+        let cutoff = chrono::Local::now() - chrono::Duration::days(days as i64);
+        sessions.retain(|s| local_dt(&s.started_at).is_some_and(|d| d >= cutoff));
+        if sessions.is_empty() {
+            println!("no saved checks in the last {days} days");
+            return Ok(());
+        }
+    }
+
+    // ---- summary line (mirrors the report's stat cards) -------------------
+    let scores: Vec<f64> = sessions.iter().filter_map(|s| s.fatigue_score).collect();
+    let n_days = sessions
+        .iter()
+        .filter_map(|s| local_dt(&s.started_at).map(|d| d.format("%Y-%m-%d").to_string()))
+        .collect::<std::collections::BTreeSet<_>>()
+        .len();
+    print!(
+        "blinkwell history — {} check{} · {n_days} day{}",
+        sessions.len(),
+        if sessions.len() == 1 { "" } else { "s" },
+        if n_days == 1 { "" } else { "s" }
+    );
+    if !scores.is_empty() {
+        let avg = scores.iter().sum::<f64>() / scores.len() as f64;
+        print!(
+            " · avg {avg:.0} · best {:.0} · worst {:.0}",
+            scores.iter().cloned().fold(f64::INFINITY, f64::min),
+            scores.iter().cloned().fold(f64::NEG_INFINITY, f64::max)
         );
     }
-    const SPARK: &[char] = &['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
-    let scores: Vec<f64> = recent
+    println!();
+
+    // ---- grouped bars -----------------------------------------------------
+    let mut groups: Vec<(String, String, Vec<&QuickCheckResult>)> = Vec::new();
+    for s in &sessions {
+        let (k, label) = group_key(s, group);
+        match groups.last_mut() {
+            Some((gk, _, v)) if *gk == k => v.push(s),
+            _ => groups.push((k, label, vec![s])),
+        }
+    }
+    let groups: Vec<_> = groups.into_iter().rev().take(n).rev().collect();
+    let vals: Vec<Option<f64>> = groups
         .iter()
-        .rev()
-        .filter_map(|s| s.fatigue_score)
+        .map(|(.., v)| {
+            let vs: Vec<f64> = v.iter().filter_map(|s| metric_val(s, metric_key)).collect();
+            (!vs.is_empty()).then(|| vs.iter().sum::<f64>() / vs.len() as f64)
+        })
         .collect();
-    if scores.len() >= 2 {
-        let line: String = scores
-            .iter()
-            .map(|x| SPARK[((x / 100.0).clamp(0.0, 1.0) * 7.0).round() as usize])
-            .collect();
-        println!("  fatigue trend (old→new): {line}");
+    let vmax = vals.iter().flatten().cloned().fold(0.0_f64, f64::max);
+    const BARW: usize = 28;
+    let labw = groups
+        .iter()
+        .map(|(_, l, _)| l.chars().count())
+        .max()
+        .unwrap_or(0);
+    println!(
+        "\n  {metric_label}{}",
+        if unit.is_empty() {
+            String::new()
+        } else {
+            format!(" ({unit})")
+        }
+    );
+    for ((_, label, members), v) in groups.iter().zip(&vals) {
+        match v {
+            Some(v) if vmax > 0.0 => {
+                let w = ((v / vmax) * BARW as f64).round().max(1.0) as usize;
+                let sev = if metric_key == "score" {
+                    if *v >= 60.0 {
+                        "  [HIGH]"
+                    } else if *v >= 35.0 {
+                        "  [WARN]"
+                    } else {
+                        ""
+                    }
+                } else {
+                    ""
+                };
+                println!("  {label:<labw$}  {}{:>7.1}{unit}{sev}", "█".repeat(w), v);
+            }
+            _ => println!("  {label:<labw$}  —",),
+        }
+        let _ = members;
+    }
+    if groups.iter().any(|(_, _, v)| v.len() > 1) {
+        println!("  (groups show the mean of their checks)");
+    }
+
+    // ---- detail table -----------------------------------------------------
+    println!(
+        "\n  {:<16} {:>5} {:>6} {:>7} {:>7} {:>7} {:>6} {:>5} {:>6}  conf",
+        "when", "score", "b/min", "partial", "perclos", "blinkms", "reopen", "dist", "usable"
+    );
+    for s in sessions.iter().rev().take(n) {
+        let when = local_dt(&s.started_at)
+            .map(|d| d.format("%Y-%m-%d %H:%M").to_string())
+            .unwrap_or_else(|| s.started_at.clone());
+        println!(
+            "  {when:<16} {:>5} {:>6.1} {:>6.0}% {:>6.1}% {:>7.0} {:>5.0}% {:>5.0} {:>6.0}  {:?}",
+            s.fatigue_score
+                .map(|x| format!("{x:.0}"))
+                .unwrap_or_else(|| "—".into()),
+            s.blink_rate,
+            s.incomplete_ratio * 100.0,
+            s.perclos * 100.0,
+            s.mean_blink_ms,
+            s.mean_reopen_frac * 100.0,
+            s.distance_cm,
+            s.quality_ms / 1000.0,
+            s.confidence
+        );
     }
     Ok(())
 }
@@ -841,7 +1001,12 @@ fn main() {
                 Ok(())
             }
         }
-        Some(Cmd::History { n }) => cmd_history(*n),
+        Some(Cmd::History {
+            n,
+            days,
+            group,
+            metric,
+        }) => cmd_history(*n, *days, group, metric),
         Some(Cmd::Report) => report::build_report().map(|path| {
             println!("blinkwell: report written to {}", path.display());
             report::open_report(&path);
