@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>blinkwell — how the algorithm works</title>
+<style>
+:root{
+  --bg:#fff; --panel:#f6f8fa; --line:#e4e9ee; --ink:#0f1722;
+  --txt:#3c4656; --mut:#5f6b7a; --acc:#0e7a6d; --acc-ink:#0b5f56;
+  --acc-soft:#e7f4f1; --acc-line:#cde8e2;
+}
+*{box-sizing:border-box;margin:0}
+body{font:14px/1.6 -apple-system,"Segoe UI",Roboto,sans-serif;color:var(--ink);
+  max-width:720px;margin:0 auto;padding:44px 40px}
+h1{font-size:26px;letter-spacing:-.02em;margin-bottom:4px}
+h1 b{color:var(--acc)}
+.sub{color:var(--mut);font-size:13px;margin-bottom:28px}
+h2{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--acc-ink);
+  margin:26px 0 12px}
+p{color:var(--txt);margin-bottom:10px}
+ol,ul{color:var(--txt);margin:0 0 10px 22px}
+li{margin-bottom:6px}
+li b, p b{color:var(--ink)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 18px;margin-bottom:10px}
+.pipe{display:flex;flex-direction:column;gap:0;margin:12px 0}
+.pstep{display:flex;gap:12px;align-items:flex-start}
+.pstep .dot{flex:0 0 24px;height:24px;border-radius:50%;background:var(--acc);color:#fff;
+  font:700 12px/24px -apple-system,sans-serif;text-align:center;margin-top:2px}
+.pstep .stem{flex:1;padding-bottom:16px;border-left:0;position:relative}
+.pstep h3{font-size:14px;margin-bottom:2px}
+.pstep p{margin:0;font-size:13px}
+.arrow{color:var(--acc);font-size:12px;margin:-10px 0 10px 11px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.note{background:var(--acc-soft);border:1px solid var(--acc-line);border-radius:10px;
+  padding:12px 16px;font-size:13px;color:#234039;margin:14px 0}
+.note b{color:var(--acc-ink)}
+code{font:12px ui-monospace,Menlo,Consolas,monospace;background:var(--panel);
+  border:1px solid var(--line);border-radius:5px;padding:1px 5px}
+.tbl{width:100%;border-collapse:collapse;font-size:13px;margin:10px 0}
+.tbl td{border-bottom:1px solid var(--line);padding:7px 8px;vertical-align:top;color:var(--txt)}
+.tbl td:first-child{color:var(--ink);font-weight:600;white-space:nowrap;width:34%}
+footer{margin-top:30px;padding-top:12px;border-top:1px solid var(--line);
+  font-size:11px;color:var(--mut);display:flex;justify-content:space-between}
+</style>
+</head>
+<body>
+
+<h1>blink<b>[well]</b> — how the algorithm works</h1>
+<div class="sub">For stakeholders — what runs on the user's machine, and where Google's library fits.</div>
+
+<h2>What it does, in one sentence</h2>
+<p>Every ~10 minutes, blinkwell opens the user's camera for ~60 seconds, measures how their
+eyes are behaving (blink rate, eyelid closure, partial blinks), and compares that against
+<i>their own</i> normal — then suggests a break when fatigue builds. Everything happens on
+the device; no video ever leaves it.</p>
+
+<h2>The pipeline, step by step</h2>
+<div class="pipe">
+  <div class="pstep"><div class="dot">1</div><div class="stem">
+    <h3>Short camera windows</h3>
+    <p>The camera is opened only for a ~60-second check every ~10 minutes (~10% of the time)
+    and fully released between checks — the webcam LED is an honest signal.</p>
+  </div></div>
+  <div class="pstep"><div class="dot">2</div><div class="stem">
+    <h3>Face landmarks — Google's MediaPipe Face Landmarker</h3>
+    <p>Each frame is passed to Google's on-device model, which returns <b>478 3D facial
+    landmarks</b>, <b>52 expression signals</b> ("blendshapes", including per-eye blink), and a
+    <b>head-pose matrix</b> (head rotation/position). Runs locally in real time.</p>
+  </div></div>
+  <div class="pstep"><div class="dot">3</div><div class="stem">
+    <h3>Quality gates — only good frames count</h3>
+    <p>Frames are discarded when there is no face, the head is turned too far, it's too dark,
+    the frame rate dropped, or there's heavy motion. Look away mid-check and the clock
+    pauses — only aligned, usable time is measured.</p>
+  </div></div>
+  <div class="pstep"><div class="dot">4</div><div class="stem">
+    <h3>Blink state machine</h3>
+    <p>A small deterministic state machine tracks each eyelid's cycle —
+    <b>open → closing → closed → reopening</b>. From complete and interrupted cycles it derives
+    the fatigue signals below.</p>
+  </div></div>
+  <div class="pstep"><div class="dot">5</div><div class="stem">
+    <h3>Eight fatigue signals → one score</h3>
+    <p>Signals are combined into a 0–100 fatigue score with a status and a suggested action
+    (a 20-20-20 break, palming, or guided full-blink exercises).</p>
+  </div></div>
+  <div class="pstep"><div class="dot">6</div><div class="stem">
+    <h3>Personal baseline</h3>
+    <p>The first 3 checks learn the user's <i>own</i> normal. After that, scores are judged
+    against <b>their</b> baseline — not population averages — so the tool adapts to the person.</p>
+  </div></div>
+</div>
+
+<h2>The eight signals it measures</h2>
+<table class="tbl">
+  <tr><td>Blink rate</td><td>Blinks per minute — drops when concentrating, spikes when strained.</td></tr>
+  <tr><td>Partial blinks</td><td>Share of blinks that don't fully close — a classic screen-fatigue sign.</td></tr>
+  <tr><td>PERCLOS</td><td>Percent of time the eyelids cover the eyes — the standard clinical drowsiness measure.</td></tr>
+  <tr><td>Blink duration</td><td>How long eyes stay closed per blink — longer as tiredness grows.</td></tr>
+  <tr><td>Reopen completeness</td><td>Whether eyes fully reopen — lagging lids signal fatigue.</td></tr>
+  <tr><td>Screen distance</td><td>Estimated from head geometry — leaning closer correlates with strain.</td></tr>
+  <tr><td>Usable check time</td><td>Share of the window with a well-aligned face — feeds confidence.</td></tr>
+  <tr><td>Confidence</td><td>How trustworthy this particular check is (lighting, alignment, duration).</td></tr>
+</table>
+
+<h2>What Google's library provides — and what it doesn't</h2>
+<p>We use <b>MediaPipe Face Landmarker</b>, Google's production face model. Its capabilities:</p>
+<ul>
+  <li><b>478 3D face landmarks</b> at real-time frame rates — the geometry we measure eyelid
+      gaps, blink cycles and head distance from.</li>
+  <li><b>52 blendshape coefficients</b> — per-frame expression scores (e.g. <code>eyeBlinkLeft</code>,
+      <code>eyeBlinkRight</code>) that corroborate the geometric signals.</li>
+  <li><b>Head-pose transform matrix</b> — head rotation/position, used for the alignment gates
+      and distance estimate.</li>
+  <li><b>Fully on-device</b> — the model is a small file (~MB) embedded in our app/CLI; it needs
+      no internet and runs on CPU (XNNPACK) or browser GPU (WebGL/wasm).</li>
+</ul>
+<p>Equally important — what it is <b>not</b> used for: no face recognition or identification, no
+images stored, no cloud calls for video. Frames are processed in memory and discarded
+immediately; only summary numbers (the signals above) are saved to the user's own history file.</p>
+
+<div class="note"><b>One honest caveat:</b> the newest engine builds may send Google anonymous
+usage counters (which feature ran, how long it took). Camera frames and results are never sent.
+This is documented publicly on the product site.</div>
+
+<h2>Why the design is the way it is</h2>
+<ul>
+  <li><b>Periodic, not continuous</b> — the camera is off ~90% of the time; the LED can't
+      silently stay on, and it keeps the tool lightweight.</li>
+  <li><b>Personal, not population-average</b> — blink norms vary hugely between people;
+      a per-user baseline is what makes the score meaningful.</li>
+  <li><b>Explainable signals</b> — every score decomposes into measurable eye behaviors, so the
+      product can show <i>why</i> it's suggesting a break, not just <i>that</i> it is.</li>
+</ul>
+
+<footer>
+  <span>blinkwell — on-device eye fatigue monitor · MIT license</span>
+  <span>blinkwell.netlify.app</span>
+</footer>
+</body>
+</html>
