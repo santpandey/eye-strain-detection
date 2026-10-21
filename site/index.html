@@ -180,8 +180,13 @@ footer{padding:36px 0 48px;border-top:1px solid var(--line);margin-top:52px;font
 // One command, auto-detected. The page picks the right installer for the
 // visitor's OS; tabs let them switch. The native installers run on their
 // platform's shell; `uvx blinkwell` is literally identical on every OS.
-var GH_RAW = 'https://raw.githubusercontent.com/santpandey/eye-strain-detection/main/site';
-var base = /^https?:/.test(location.origin) ? location.origin.replace(/\/$/, '') : GH_RAW;
+// Set SITE_URL once the site's domain is known (e.g. the Netlify URL) so the
+// commands always show it — including local previews. Otherwise it follows
+// the page's own origin; file:// previews show a placeholder.
+var SITE_URL = '';
+var base = SITE_URL || (/^https?:/.test(location.origin)
+  ? location.origin.replace(/\/$/, '')
+  : 'https://<site-url>');
 
 var PLATFORMS = {
   win:  { cmd: 'irm ' + base + '/install.ps1 | iex',
