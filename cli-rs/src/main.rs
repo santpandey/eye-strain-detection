@@ -152,10 +152,13 @@ fn print_result_card(r: &QuickCheckResult, score_out: Option<&FatigueScoreOut>, 
             } else {
                 "population estimate"
             };
-            println!("  Fatigue score: {:.0}/100  ({anchor})", score);
+            println!(
+                "  Fatigue score: {:.0}/100  ({anchor}; higher = more tired)",
+                score
+            );
         }
     } else if let Some(fs) = r.fatigue_score {
-        println!("  Fatigue score: {:.0}/100", fs);
+        println!("  Fatigue score: {:.0}/100  (higher = more tired)", fs);
     }
     println!("{bar}");
     println!(

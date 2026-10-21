@@ -25,6 +25,7 @@ ctrlc = "3"
 notify-rust = "4"
 uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+terminal_size = "0.4"
 
 [profile.release]
 strip = true

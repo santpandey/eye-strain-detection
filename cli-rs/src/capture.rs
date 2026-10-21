@@ -448,12 +448,19 @@ fn draw_align_ui(
     const C1: usize = 14;
     const R0: usize = 2;
     const R1: usize = 5;
+    // Center the whole block horizontally in the terminal.
+    let term_w = terminal_size::terminal_size()
+        .map(|(terminal_size::Width(w), _)| w as usize)
+        .unwrap_or(80);
+    let pad = " ".repeat(term_w.saturating_sub(W + 2) / 2);
     let fc = (cx * (W - 1) as f64).round().clamp(0.0, (W - 1) as f64) as usize;
     let fr = (cy * (H - 1) as f64).round().clamp(0.0, (H - 1) as f64) as usize;
 
     let mut lines = Vec::with_capacity(H + 4);
-    lines.push("      align your face inside the frame".to_string());
-    lines.push(format!("      ┌{}┐", "─".repeat(W)));
+    lines.push(format!(
+        "{pad}align your face inside the frame   (Enter to skip)"
+    ));
+    lines.push(format!("{pad}┌{}┐", "─".repeat(W)));
     for r in 0..H {
         let mut row = [' '; W];
         if r == R0 || r == R1 {
@@ -475,10 +482,10 @@ fn draw_align_ui(
         if face && r == fr {
             row[fc] = if ok { 'O' } else { 'o' };
         }
-        lines.push(format!("      │{}│", row.iter().collect::<String>()));
+        lines.push(format!("{pad}│{}│", row.iter().collect::<String>()));
     }
-    lines.push(format!("      └{}┘", "─".repeat(W)));
-    lines.push(format!("      {hint:<40} {held_s:.1}/1.0 s"));
+    lines.push(format!("{pad}└{}┘", "─".repeat(W)));
+    lines.push(format!("{pad}{hint:<46} {held_s:.1}/1.0 s"));
 
     if !*first {
         print!("\x1b[{}A", lines.len());
@@ -511,6 +518,17 @@ where
     let run = (|| -> Result<()> {
         // ---- phase 1: alignment (not scored) ------------------------------
         if align_timeout_ms > 0.0 {
+            // Enter key skips the phase — a blocked stdin reader thread sends
+            // on this channel; it dies with the process.
+            let (skip_tx, skip_rx) = std::sync::mpsc::channel::<()>();
+            if draw_ui {
+                std::thread::spawn(move || {
+                    let mut s = String::new();
+                    if std::io::stdin().read_line(&mut s).is_ok() {
+                        let _ = skip_tx.send(());
+                    }
+                });
+            }
             let t0 = Instant::now();
             let mut first_draw = true;
             let mut aligned_since: Option<Instant> = None;
@@ -518,6 +536,7 @@ where
             while t0.elapsed().as_secs_f64() * 1000.0 < align_timeout_ms {
                 if aligned_since.is_some_and(|t| t.elapsed().as_millis() as u64 >= ALIGN_HOLD_MS)
                     || cancel.as_ref().is_some_and(|c| c.load(Ordering::Relaxed))
+                    || skip_rx.try_recv().is_ok()
                 {
                     break;
                 }
