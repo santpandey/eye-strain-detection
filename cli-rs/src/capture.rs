@@ -38,8 +38,14 @@ const FACE_H: usize = 32;
 const EYE_W: usize = 48;
 const EYE_H: usize = 24;
 
-/// `public/models/face_landmarker.task` relative to the repo root. Overridable
-/// with --model; a copy next to the exe works too.
+/// Model resolution: `--model` > exe_dir/models/ (bundle layout) > repo
+/// checkout > embedded copy written to the user cache dir. The embedded
+/// fallback makes a lone `eyefd` binary fully self-contained.
+static EMBEDDED_MODEL: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../public/models/face_landmarker.task"
+));
+
 pub fn default_model_path() -> PathBuf {
     // exe_dir/models/face_landmarker.task first (shipped bundle layout)…
     if let Ok(exe) = std::env::current_exe() {
@@ -51,7 +57,22 @@ pub fn default_model_path() -> PathBuf {
         }
     }
     // …then the repo checkout layout (<crate>/../public/models).
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../public/models/face_landmarker.task")
+    let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../public/models/face_landmarker.task");
+    if p.exists() {
+        return p;
+    }
+    // …last resort: extract the embedded model to <cache>/eyefd/models/.
+    let cache = directories::BaseDirs::new()
+        .map(|d| d.cache_dir().to_path_buf())
+        .unwrap_or_else(std::env::temp_dir)
+        .join("eyefd")
+        .join("models");
+    let _ = std::fs::create_dir_all(&cache);
+    let p = cache.join("face_landmarker.task");
+    if !p.exists() {
+        let _ = std::fs::write(&p, EMBEDDED_MODEL);
+    }
+    p
 }
 
 /// Rec.601 luma stats of a normalized box, resampled to out_w×out_h by

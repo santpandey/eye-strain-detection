@@ -148,9 +148,28 @@ in memory only; only summary metrics persist under `~/.eyefd`
 - Build: `cargo build -p eyefd --release` (inside `cli-rs/` it's just
   `cargo build --release`; the crate is a standalone package named `eyefd`).
 - Needs `face_landmarker.task` (`--model`, `models/` beside the exe, or the
-  repo's `public/models/` copy) and a libmediapipe native library
+  repo's `public/models/` copy — else the copy embedded via `include_bytes!`
+  is written to `<cache>/eyefd/models/`) and a libmediapipe native library
   (auto-downloaded from the official PyPI wheel on first run;
   `MEDIAPIPE_LIB` or a `libmediapipe.dll` beside the exe overrides).
+
+## Distribution (site/, workflows, installers)
+
+- `site/` is the public brochure (px0-style): `index.html`, `install.sh`,
+  `install.ps1`. Netlify publishes `site/` only (netlify.toml); the Vite app
+  is a local harness and is NOT published.
+- `site/install.{sh,ps1}` download `eyefd-<os>-<arch>.{tar.gz,zip}` from
+  `github.com/<REPO>/releases/latest/download/` — set the `REPO`/`$Repo`
+  constant (and the `OWNER/REPO` link in site/index.html) once the GitHub
+  repo exists. Single-file install: the binary embeds the model, and the
+  mediapipe crate fetches libmediapipe itself on first run.
+- `.github/workflows/release.yml` — on tag `v*`: matrix builds
+  linux-x64 / macos-arm64 / windows-x64 / windows-arm64 → GitHub Release
+  assets. No libmediapipe bundling needed (runtime download). Intel mac +
+  linux-arm64 have no PyPI wheel → those users use the pip package.
+- `.github/workflows/publish-pypi.yml` — on tag `v*`: `uv build` + `uv
+  publish` (PyPI trusted publishing; configure the publisher on PyPI once,
+  or set `PYPI_API_TOKEN`). Gives `uvx eyefd` / `pipx install eyefd`.
 - **Parity gate**: after touching `cli-rs/src/{config,features,quality,blink,
   session,thresholds,eval,baseline,score}.rs`, re-run
   `npm run eval:trace -- tests/traces/synthetic.trace.json tests/traces/synthetic.labels.json`

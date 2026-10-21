@@ -5,7 +5,8 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "eyefd"
 version = "0.1.0"
-description = "On-device eye-fatigue monitor — local-process port of the web app's analysis pipeline"
+description = "On-device eye-fatigue monitor — periodic camera windows, baseline, breaks"
+readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
   # mediapipe 0.10.30+ bundles a native Clearcut telemetry uploader that

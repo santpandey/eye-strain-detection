@@ -1,0 +1,24 @@
+name: publish-pypi
+
+# Publishes the Python reference CLI to PyPI so `uvx eyefd` / `pipx install eyefd`
+# works. Uses PyPI Trusted Publishing (OIDC) — no API token secret needed:
+# on PyPI, add a trusted publisher for <owner>/<repo> -> .github/workflows/publish-pypi.yml
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+
+jobs:
+  pypi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Build
+        run: uv build --directory cli --out-dir dist
+      - name: Publish to PyPI
+        run: uv publish dist/*
+        # or: uv publish --token ${{ secrets.PYPI_API_TOKEN }} dist/*
