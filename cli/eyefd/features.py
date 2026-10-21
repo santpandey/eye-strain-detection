@@ -18,7 +18,7 @@ this is a 1:1 port. Pixel-space distances (w, h = frame size).
 from __future__ import annotations
 
 import math
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 
 # Right eye then left eye, EAR ordering p1..p6.
 EAR_R = [33, 160, 158, 133, 153, 144]

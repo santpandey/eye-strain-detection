@@ -8,9 +8,13 @@ version = "0.1.0"
 description = "On-device eye-fatigue monitor — local-process port of the web app's analysis pipeline"
 requires-python = ">=3.11"
 dependencies = [
-  "mediapipe>=0.10.14,<0.11",
-  "opencv-python>=4.10,<5",
-  "numpy>=1.26,<3",
+  # mediapipe 0.10.30+ bundles a native Clearcut telemetry uploader that
+  # attempts network calls; 0.10.21 predates it — pinned hard on purpose.
+  "mediapipe==0.10.21",
+  # mediapipe pulls opencv-contrib-python (superset providing cv2);
+  # installing opencv-python too just fights it for the cv2 package dir.
+  "opencv-contrib-python>=4.9,<5",
+  "numpy>=1.26,<2",  # mediapipe 0.10.21 requires numpy<2
 ]
 
 [project.optional-dependencies]

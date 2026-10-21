@@ -184,15 +184,19 @@ def cmd_check(args) -> int:
             print(
                 f"eyefd check — camera on for {seconds:.0f} s (webcam light on = honest signal)"
             )
-        r, _ = _run_capture(
-            engine,
-            lambda engine, on_frame: iter_camera_features(
-                engine, args.camera, seconds * 1000, on_frame
-            ),
-            args.json,
-            "camera",
-            status_prefix="check  ",
-        )
+        try:
+            r, _ = _run_capture(
+                engine,
+                lambda engine, on_frame: iter_camera_features(
+                    engine, args.camera, seconds * 1000, on_frame
+                ),
+                args.json,
+                "camera",
+                status_prefix="check  ",
+            )
+        except RuntimeError as e:
+            print(f"camera error: {e}", file=sys.stderr)
+            return 2
     finally:
         engine.close()
     _finish_result(r, "camera", args.json)
@@ -206,13 +210,17 @@ def cmd_replay(args) -> int:
     try:
         if not args.json:
             print(f"eyefd replay — {args.video} (file source: distance n/a)")
-        r, _ = _run_capture(
-            engine,
-            lambda engine, on_frame: iter_file_features(engine, args.video, on_frame),
-            args.json,
-            "file",
-            status_prefix="replay ",
-        )
+        try:
+            r, _ = _run_capture(
+                engine,
+                lambda engine, on_frame: iter_file_features(engine, args.video, on_frame),
+                args.json,
+                "file",
+                status_prefix="replay ",
+            )
+        except RuntimeError as e:
+            print(f"replay error: {e}", file=sys.stderr)
+            return 2
     finally:
         engine.close()
     _finish_result(r, "file", args.json)
@@ -238,8 +246,8 @@ def cmd_monitor(args) -> int:
     snoozed_until: dict = {}
     if not args.json:
         print(
-            f"eyefd monitor — {args.window_s:.0f} s camera window every {args.interval_min:.0f} min"
-            f" (break nudge every {args.break_every_min:.0f} min). Ctrl+C to stop."
+            f"eyefd monitor — {args.window_s:g} s camera window every {args.interval_min:g} min"
+            f" (break nudge every {args.break_every_min:g} min). Ctrl+C to stop."
         )
         print("  camera LED is ON only while a window runs — that's the honest signal.")
 
@@ -327,7 +335,10 @@ def _load_trace_frames(path: str) -> list:
     from .features import FrameFeatures
 
     j = json.loads(Path(path).read_text(encoding="utf-8"))
-    frames = (j.get("trace") or {}).get("frames") or j.get("frames")
+    trace = j.get("trace")
+    frames = trace.get("frames") if isinstance(trace, dict) else None
+    if frames is None:  # j.trace?.frames ?? j.frames
+        frames = j.get("frames")
     if not isinstance(frames, list):
         raise SystemExit(f"{path}: no frames / trace.frames array")
     return [FrameFeatures.from_dict(f) for f in frames]
@@ -438,8 +449,8 @@ def main(argv=None) -> int:
     common(p)
     p.set_defaults(fn=cmd_trace)
 
+    _fix_console_encoding()  # before parse_args so --help prints cleanly too
     args = ap.parse_args(argv)
-    _fix_console_encoding()
     try:
         return args.fn(args)
     except KeyboardInterrupt:

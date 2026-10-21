@@ -1,7 +1,7 @@
-"""Guided eye-rest exercises offered by background-monitor reminders.
-Pure data.
+"""Guided eye-rest exercises offered by monitor reminders. Pure data.
 
-Keep in sync with src/lib/monitor/exercises.ts — this is a 1:1 port.
+Ported 1:1 from src/lib/monitor/exercises.ts — removed with the in-browser
+monitor; this module is now the canonical home of the exercise data.
 """
 
 EXERCISES = {

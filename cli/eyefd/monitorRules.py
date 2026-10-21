@@ -1,6 +1,8 @@
 """evaluate_reminders -> break/tired/blink reminders for the monitor.
 
-Keep in sync with src/lib/analysis/monitorRules.ts — this is a 1:1 port.
+Ported 1:1 from src/lib/analysis/monitorRules.ts — that file was removed when
+the in-browser monitor was deleted; this module is now the canonical home of
+the reminder rules.
 """
 
 from __future__ import annotations
@@ -19,7 +21,9 @@ def evaluate_reminders(s: dict) -> list:
     At most one reminder per kind is ever returned by a single evaluation.
     """
     out: list = []
-    break_every_ms = s.get("breakEveryMs") or CFG.monitorBreakEveryMs
+    break_every_ms = s.get("breakEveryMs")
+    if break_every_ms is None:
+        break_every_ms = CFG.monitorBreakEveryMs
 
     # 20-20-20: time since the last break (or since monitoring started).
     break_since = s["lastBreakAt"] if s["lastBreakAt"] is not None else s["monitorOnSince"]

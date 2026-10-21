@@ -1,7 +1,9 @@
-# Frozen-ish pins — as installed into cli/.venv (Python 3.11, Windows).
-# Re-freeze after upgrades: .venv/Scripts/python.exe -m pip freeze
-mediapipe==0.10.35
-opencv-python==5.0.0.93
-numpy==2.4.6
+# Frozen pins — as installed into cli/.venv (Python 3.11, Windows).
+# mediapipe is pinned at 0.10.21: later builds ship a native Clearcut
+# telemetry uploader that attempts network calls (violates the privacy rule).
+# opencv-contrib-python provides cv2; a separate opencv-python conflicts.
+mediapipe==0.10.21
+opencv-contrib-python==4.11.0.86
+numpy==1.26.4
 plyer==2.1.0
 pytest==9.1.1

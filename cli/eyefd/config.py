@@ -105,7 +105,9 @@ class _Cfg:
     distanceWatchCm = 50
     distanceHighCm = 40
     lumaWatch = 60
-    # Background monitor
+    # Background monitor — CLI-owned. These five were removed from config.ts
+    # when the in-browser monitor was deleted (monitoring lives in the CLI
+    # now); values carried over verbatim.
     monitorIntervalMs = 900_000  # camera-on window every ~15 min
     monitorWindowMs = 60_000  # each check window runs ~1 min
     monitorBreakEveryMs = 1_200_000  # 20-20-20 break nudge every ~20 min
