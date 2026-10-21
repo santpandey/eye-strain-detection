@@ -41,6 +41,37 @@ summary metrics (`QuickCheckResult`) are stored, in IndexedDB.
   (per-frame trace, delegate, renderer). Don't edit `src/` during a run: Vite
   HMR reloads the page and spoils it.
 
+## Python CLI (cli/)
+
+A faithful port of the analysis layer to a local process — no browser, no
+hidden-tab problem. `cli/eyefd/` mirrors the TS modules 1:1 (`config.py`,
+`features.py`, `quality.py`, `blink.py`, `session.py`, `thresholds.py`,
+`baseline.py`, `fatigueScore.py`, `eval.py`); `monitorRules.py`,
+`exercises.py`, `notify.py` are ports of the removed in-browser monitor
+(`src/lib/analysis/monitorRules.ts`, `src/lib/monitor/*`) — the CLI is now
+their canonical home, and the five `monitor*` CFG constants are likewise
+CLI-owned (deleted from config.ts). Process-side plumbing is `capture.py`
+(cv2 + mediapipe), `storage.py` (`~/.eyefd/baseline.json` + `history.jsonl`),
+`scoreSession.py`, `cli.py`.
+
+- Setup: `cd cli && py -3.11 -m venv .venv && .venv/Scripts/activate && pip install -r requirements.txt`
+  (or `pip install -e .`; mediapipe is hard-pinned to 0.10.21 — later builds
+  ship a native telemetry uploader that attempts network calls).
+- Commands: `eyefd check [--seconds 90] [--camera 0]`, `eyefd monitor
+  [--interval-min 15] [--window-s 60] [--break-every-min 20]` (camera LED on
+  only during windows — VideoCapture released between them), `eyefd replay
+  <video>` (source 'file', distance n/a), `eyefd trace <trace.json>
+  [--labels <labels.json>] [--tol 300]` (parity with `npm run eval:trace`).
+  `--json` gives machine-readable lines.
+- Parity check: `cli/.venv/Scripts/python.exe -m eyefd trace
+  tests/traces/synthetic.trace.json --labels tests/traces/synthetic.labels.json`
+  must reproduce `npm run eval:trace` event-for-event (verified F1-identical on
+  synthetic + two eval-data diag traces).
+- **Keep `cli/eyefd/config.py` in sync with `src/lib/analysis/config.ts`** —
+  every CFG constant was copied verbatim.
+- Tests: `cli/.venv/Scripts/python.exe -m pytest cli/tests` (pytest; mirrors
+  tests/blink.test.ts + session.test.ts).
+
 ## Delegate selection (engine.ts)
 
 Software WebGL (SwiftShader/llvmpipe/etc., e.g. headless Chromium) → CPU.
@@ -100,3 +131,35 @@ tests/                           # vitest unit tests (synthetic FrameFeatures @3
   `'monitor'` so old monitor records render in History.
 - Later steps (not built yet): PWA/service worker, redness analysis (pilot in
   `e2e/redness-pilot.spec.ts`), charts, Rust/PyInstaller packaging.
+
+## cli-rs/ — the Rust monitor CLI (`eyefd`)
+
+Windows-first Rust port of the whole pipeline for background monitoring:
+camera → MediaPipe FaceLandmarker (`mediapipe` crate, CPU/XNNPACK) →
+`FrameFeatures` → the ported `QualityCtx`/`BlinkDetector`/`QuickCheckAggregator`
+→ `QuickCheckResult`. Commands: `check` (live quick check), `monitor`
+(periodic ~60 s windows; the camera device is created only during a window so
+the LED is honestly off between windows), `replay` (video file via an ffmpeg
+subprocess — not bundled), `trace` (offline parity harness for
+`scripts/eval-trace.ts`). Same privacy rule as the app: frames are processed
+in memory only; only summary metrics persist under `~/.eyefd`
+(`EYEFD_HOME` overrides for tests).
+
+- Build: `cargo build -p eyefd --release` (inside `cli-rs/` it's just
+  `cargo build --release`; the crate is a standalone package named `eyefd`).
+- Needs `face_landmarker.task` (`--model`, `models/` beside the exe, or the
+  repo's `public/models/` copy) and a libmediapipe native library
+  (auto-downloaded from the official PyPI wheel on first run;
+  `MEDIAPIPE_LIB` or a `libmediapipe.dll` beside the exe overrides).
+- **Parity gate**: after touching `cli-rs/src/{config,features,quality,blink,
+  session,thresholds,eval,baseline,score}.rs`, re-run
+  `npm run eval:trace -- tests/traces/synthetic.trace.json tests/traces/synthetic.labels.json`
+  and `cargo run -p eyefd -- trace tests/traces/synthetic.trace.json --labels tests/traces/synthetic.labels.json`
+  (same for `eval-data/diag-20261020_152808-chromium.json` +
+  `eval-data/20261020_152808.labels.json`) and confirm identical event lists
+  and TP/FP/FN.
+- **`cli-rs/src/config.rs` must stay synchronized with
+  `src/lib/analysis/config.ts` and `cli/eyefd/config.py`** — the header
+  comment says the same. Names match the TS (`PROM_START` = `promStart`).
+- `cli-rs/tests/blink.rs` ports `tests/blink.test.ts`; keep new detector
+  behaviors covered in both places.

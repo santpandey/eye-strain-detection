@@ -23,6 +23,8 @@ anyhow = "1"
 directories = "6"
 ctrlc = "3"
 notify-rust = "4"
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 
 [profile.release]
 strip = true
