@@ -6,8 +6,8 @@ import './styles/base.css';
 // A lazy chunk that fails to load means the page predates the deployed build
 // (or the dev server restarted) — reload once to get matching code.
 window.addEventListener('vite:preloadError', () => {
-  if (sessionStorage.getItem('eyefd.reloaded')) return;
-  sessionStorage.setItem('eyefd.reloaded', '1');
+  if (sessionStorage.getItem('blinkwell.reloaded')) return;
+  sessionStorage.setItem('blinkwell.reloaded', '1');
   location.reload();
 });
 

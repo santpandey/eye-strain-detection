@@ -51,7 +51,7 @@ hidden-tab problem. `cli/blinkwell/` mirrors the TS modules 1:1 (`config.py`,
 (`src/lib/analysis/monitorRules.ts`, `src/lib/monitor/*`) — the CLI is now
 their canonical home, and the five `monitor*` CFG constants are likewise
 CLI-owned (deleted from config.ts). Process-side plumbing is `capture.py`
-(cv2 + mediapipe), `storage.py` (`~/.eyefd/baseline.json` + `history.jsonl`),
+(cv2 + mediapipe), `storage.py` (`~/.blinkwell/baseline.json` + `history.jsonl`),
 `scoreSession.py`, `cli.py`.
 
 - Setup: `cd cli && py -3.11 -m venv .venv && .venv/Scripts/activate && pip install -r requirements.txt`
@@ -142,8 +142,8 @@ camera → MediaPipe FaceLandmarker (`mediapipe` crate, CPU/XNNPACK) →
 the LED is honestly off between windows), `replay` (video file via an ffmpeg
 subprocess — not bundled), `trace` (offline parity harness for
 `scripts/eval-trace.ts`). Same privacy rule as the app: frames are processed
-in memory only; only summary metrics persist under `~/.eyefd`
-(`EYEFD_HOME` overrides for tests).
+in memory only; only summary metrics persist under `~/.blinkwell`
+(`BLINKWELL_HOME` overrides for tests).
 
 - Build: `cargo build -p blinkwell --release` (inside `cli-rs/` it's just
   `cargo build --release`; the crate is a standalone package named `blinkwell`).

@@ -33,7 +33,7 @@ const MODEL_URL = `${base}models/face_landmarker.task`;
  * `{delegate, renderer, at, reason?}`; the legacy plain 'CPU' | 'GPU' string
  * is still accepted (and always honoured).
  */
-export const DELEGATE_KEY = 'eyefd.delegate';
+export const DELEGATE_KEY = 'blinkwell.delegate';
 
 type Delegate = 'GPU' | 'CPU';
 

@@ -1,5 +1,5 @@
 /** Developer mode: localStorage flag or ?dev=1 in the URL. */
-const KEY = 'eyefd.dev';
+const KEY = 'blinkwell.dev';
 
 export function isDev(): boolean {
   try {

@@ -1,4 +1,4 @@
-# eyefd (Rust CLI)
+# blinkwell (Rust CLI)
 
 On-device eye-fatigue monitor — the **same analysis pipeline as the web app**
 (`src/lib/analysis` + `src/lib/vision`), compiled to a Windows-first Rust
@@ -6,10 +6,10 @@ binary that can watch you in the background without a browser or a hidden-tab
 throttle.
 
 ```
-eyefd check     live quick check (camera on ~90 s, then the result card)
-eyefd monitor   periodic ~60 s camera windows every ~15 min, reminders
-eyefd replay    run a video file through the same pipeline
-eyefd trace     replay a recorded trace JSON, score it against labels
+blinkwell check     live quick check (camera on ~90 s, then the result card)
+blinkwell monitor   periodic ~60 s camera windows every ~15 min, reminders
+blinkwell replay    run a video file through the same pipeline
+blinkwell trace     replay a recorded trace JSON, score it against labels
 ```
 
 ## Privacy
@@ -17,7 +17,7 @@ eyefd trace     replay a recorded trace JSON, score it against labels
 Same rule as the app: **frames never leave the device and are never
 persisted.** Camera frames are decoded in memory, converted to a row of
 `FrameFeatures` numbers, and dropped. Only the summary `QuickCheckResult`
-metrics are stored, under `~/.eyefd/` (override with `EYEFD_HOME`):
+metrics are stored, under `~/.blinkwell/` (override with `BLINKWELL_HOME`):
 
 - `baseline.json` — rolling personal baseline (per-metric reservoir, cap 40)
 - `history.jsonl` — one JSON line per saved check
@@ -45,7 +45,7 @@ the web app (wasm path).
 cargo build --release
 ```
 
-Produces `target/release/eyefd.exe`. Two native pieces are needed at run
+Produces `target/release/blinkwell.exe`. Two native pieces are needed at run
 time:
 
 1. **`face_landmarker.task`** (the MediaPipe model, ~30 MB). Looked up in
@@ -60,12 +60,12 @@ time:
 
 ```sh
 cargo run --release -- check
-eyefd.exe monitor --interval-min 15 --window-s 60
+blinkwell.exe monitor --interval-min 15 --window-s 60
 ```
 
 ## Commands
 
-### `eyefd check [--seconds 90] [--camera 0] [--json] [--model <path>]`
+### `blinkwell check [--seconds 90] [--camera 0] [--json] [--model <path>]`
 
 Opens the camera for `--seconds`, runs every frame through MediaPipe
 FaceLandmarker (VIDEO mode, CPU delegate — the app's own fallback) →
@@ -79,7 +79,7 @@ contributed to it — the same order the app uses. `confidence: low` results
 are not saved (the app "abstains" the same way). `--json` prints one
 machine-readable line instead of the card.
 
-### `eyefd monitor [--interval-min 15] [--window-s 60] [--break-every-min 20] [--camera 0]`
+### `blinkwell monitor [--interval-min 15] [--window-s 60] [--break-every-min 20] [--camera 0]`
 
 Long-running supervisor. Every `--interval-min` minutes it captures a
 `--window-s` camera window — creating the camera **only for the window** and
@@ -101,7 +101,7 @@ console `[REMINDER] title — body` line is the fallback — reminder failures
 never crash the loop. Ctrl+C exits cleanly (code 130) and releases the
 camera.
 
-### `eyefd replay <video> [--ffmpeg <path>] [--json]`
+### `blinkwell replay <video> [--ffmpeg <path>] [--json]`
 
 Decodes the video by piping `ffmpeg -i <file> -f rawvideo -pix_fmt rgb24 -`
 — ffmpeg is **not** bundled; install it on PATH or pass `--ffmpeg`. Timestamps
@@ -109,7 +109,7 @@ come from the container fps (`t = frame_index · 1000/fps`), every decoded
 frame is analysed (no playback-rate scheduling), and the result is marked
 `source: "file"` (distance shows n/a, same as the app's file mode).
 
-### `eyefd trace <trace.json>... [--labels <labels.json>] [--tol 300] [--json]`
+### `blinkwell trace <trace.json>... [--labels <labels.json>] [--tol 300] [--json]`
 
 Offline parity harness for `scripts/eval-trace.ts`: loads
 `{schema, frames: [FrameFeatures]}` (also accepts `{trace:{frames:[...]}}`
@@ -122,7 +122,7 @@ machine-readable object per trace (events, result, match).
 
 Verified parity vs `npm run eval:trace`:
 
-| trace | TS eval-trace | eyefd trace |
+| trace | TS eval-trace | blinkwell trace |
 |---|---|---|
 | `tests/traces/synthetic.trace.json` | 4 events, F1 1.000 | identical events & F1 |
 | `eval-data/diag-20261020_152808-chromium.json` | 16 events, F1 0.710 | identical events & F1 |
@@ -132,7 +132,7 @@ Verified parity vs `npm run eval:trace`:
 ```
 src/
   config.rs      every numeric threshold — keep in sync with
-                 src/lib/analysis/config.ts and cli/eyefd/config.py
+                 src/lib/analysis/config.ts and cli/blinkwell/config.py
   features.rs    FrameFeatures + landmark/blendshape/matrix math (features.ts)
   quality.rs     QualityCtx frame gates (quality.ts)
   blink.rs       BlinkDetector state machine (blink.ts)
@@ -143,7 +143,7 @@ src/
   rules.rs       monitor reminder rules (monitor rules in the app/Python port)
   exercises.rs   20-20-20 / full-blinks / palming exercise text
   eval.rs        greedy event/label matching (eval.ts)
-  storage.rs     ~/.eyefd baseline.json + history.jsonl
+  storage.rs     ~/.blinkwell baseline.json + history.jsonl
   notify.rs      toast via notify-rust, [REMINDER] console fallback
   capture.rs     camera (nokhwa/MSMF) + ffmpeg pipe + MediaPipe engine
   main.rs        clap CLI: check / monitor / replay / trace

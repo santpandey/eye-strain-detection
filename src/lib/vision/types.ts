@@ -29,7 +29,7 @@ export type WorkerInMessage =
       type: 'init';
       wasmBase: string;
       modelUrl: string;
-      /** Persisted override from localStorage `eyefd.delegate` (workers have no localStorage). */
+      /** Persisted override from localStorage `blinkwell.delegate` (workers have no localStorage). */
       delegate?: 'GPU' | 'CPU';
       /**
        * WebGL renderer the override was recorded on. When set and different

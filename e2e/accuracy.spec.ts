@@ -46,7 +46,7 @@ test('accuracy harness', async ({ page }) => {
     await expect(page.getByTestId('results').or(page.getByTestId('abstain'))).toBeVisible({
       timeout: 8 * 60_000,
     });
-    const trace = await page.evaluate(() => (window as any).__eyefdLastTrace as Trace | undefined);
+    const trace = await page.evaluate(() => (window as any).__blinkwellLastTrace as Trace | undefined);
     // Replay events recorded in the trace result via the detector events array
     // embedded in the trace frames? Events aren't in the trace — recompute by
     // re-feeding through the detector client-side is heavy; instead the app

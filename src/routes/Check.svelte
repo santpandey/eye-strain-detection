@@ -207,7 +207,7 @@
 
   function stashTrace(r: QuickCheckResult | null = null) {
     if (!dev || !agg) return;
-    (window as unknown as { __eyefdLastTrace?: unknown }).__eyefdLastTrace = {
+    (window as unknown as { __blinkwellLastTrace?: unknown }).__blinkwellLastTrace = {
       schema: 1,
       source: 'camera',
       startedAt: agg.startedAt ?? '',
@@ -245,12 +245,12 @@
   }
 
   function downloadTrace() {
-    const w = window as unknown as { __eyefdLastTrace?: unknown };
-    if (!w.__eyefdLastTrace) return;
-    const blob = new Blob([JSON.stringify(w.__eyefdLastTrace)], { type: 'application/json' });
+    const w = window as unknown as { __blinkwellLastTrace?: unknown };
+    if (!w.__blinkwellLastTrace) return;
+    const blob = new Blob([JSON.stringify(w.__blinkwellLastTrace)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `eyefd-trace-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+    a.download = `blinkwell-trace-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
     a.click();
     URL.revokeObjectURL(a.href);
   }

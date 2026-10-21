@@ -1,10 +1,10 @@
 """Local persistence for the CLI: the app's IndexedDB equivalent.
 
-- Baseline: single JSON record at ~/.eyefd/baseline.json (meta 'baseline').
-- History:  one QuickCheckResult JSON per line at ~/.eyefd/history.jsonl.
+- Baseline: single JSON record at ~/.blinkwell/baseline.json (meta 'baseline').
+- History:  one QuickCheckResult JSON per line at ~/.blinkwell/history.jsonl.
 
 Only summary metrics are ever persisted — never frames or images. Set
-EYEFD_HOME to relocate the directory (tests).
+BLINKWELL_HOME to relocate the directory (tests).
 """
 
 from __future__ import annotations
@@ -17,10 +17,19 @@ from .baseline import contribute, empty_baseline, normalize_baseline
 
 
 def data_dir() -> Path:
-    env = os.environ.get("EYEFD_HOME")
+    env = os.environ.get("BLINKWELL_HOME")
     if env:
         return Path(env)
-    return Path.home() / ".eyefd"
+    new = Path.home() / ".blinkwell"
+    old = Path.home() / ".eyefd"
+    # One-time migration from the pre-rename location — keeps existing
+    # history/baseline from installs before the blinkwell rename.
+    if not new.exists() and old.is_dir():
+        try:
+            old.rename(new)
+        except OSError:
+            pass
+    return new
 
 
 def _baseline_path() -> Path:

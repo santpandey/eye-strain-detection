@@ -9,7 +9,7 @@ test('diag run', async ({ page, browserName }) => {
   test.setTimeout(900_000);
   const forceGpu = process.env.DIAG_FORCE_GPU === '1';
   if (forceGpu) {
-    await page.addInitScript(() => localStorage.setItem('eyefd.delegate', 'GPU'));
+    await page.addInitScript(() => localStorage.setItem('blinkwell.delegate', 'GPU'));
   }
   const tag = `${process.env.DIAG_TAG ? process.env.DIAG_TAG + '-' : ''}${browserName}${forceGpu ? '-gpu' : ''}`;
   mkdirSync('eval-data', { recursive: true });
@@ -63,7 +63,7 @@ test('diag run', async ({ page, browserName }) => {
       backend: document.querySelector<HTMLElement>('.video-card')?.dataset.backend ?? null,
       endText: document.querySelector('h1')?.textContent ?? null,
       bodyText: document.body.innerText.slice(0, 2000),
-      trace: (window as any).__eyefdLastTrace ?? null,
+      trace: (window as any).__blinkwellLastTrace ?? null,
     };
   });
 

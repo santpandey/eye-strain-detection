@@ -1,4 +1,4 @@
-//! `eyefd report` — self-contained HTML dashboard of saved sessions.
+//! `blinkwell report` — self-contained HTML dashboard of saved sessions.
 
 use anyhow::{Context, Result};
 use serde::Serialize;
@@ -23,7 +23,7 @@ struct Row<'a> {
     conf: &'a str,
 }
 
-/// Build the dashboard HTML from history, write it under ~/.eyefd and
+/// Build the dashboard HTML from history, write it under ~/.blinkwell and
 /// return the file path.
 pub fn build_report() -> Result<PathBuf> {
     let sessions = crate::storage::list_sessions();

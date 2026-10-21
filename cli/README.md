@@ -55,7 +55,7 @@ blinkwell trace <trace.json> --labels <labels.json> [--tol 300]
   lines (one JSON object per result/window/reminder/trace).
 
 Data lives at `~/.blinkwell/`: `baseline.json` (per-metric reservoirs + median) and
-`history.jsonl` (one saved result per line). Set `EYEFD_HOME` to relocate.
+`history.jsonl` (one saved result per line). Set `BLINKWELL_HOME` to relocate.
 
 ## Your webcam light
 

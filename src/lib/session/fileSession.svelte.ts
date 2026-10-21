@@ -263,7 +263,7 @@ class FileSession {
   private stashTrace(r: QuickCheckResult | null = null): void {
     const agg = this.agg;
     if (!isDev() || !agg) return;
-    (window as unknown as { __eyefdLastTrace?: unknown }).__eyefdLastTrace = {
+    (window as unknown as { __blinkwellLastTrace?: unknown }).__blinkwellLastTrace = {
       schema: 1,
       source: 'file',
       startedAt: agg.startedAt ?? '',

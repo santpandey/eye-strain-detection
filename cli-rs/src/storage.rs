@@ -1,10 +1,10 @@
 //! Local persistence for the CLI: the app's IndexedDB equivalent.
 //!
-//! - Baseline: single JSON record at ~/.eyefd/baseline.json.
-//! - History:  one QuickCheckResult JSON per line at ~/.eyefd/history.jsonl.
+//! - Baseline: single JSON record at ~/.blinkwell/baseline.json.
+//! - History:  one QuickCheckResult JSON per line at ~/.blinkwell/history.jsonl.
 //!
 //! Only summary metrics are ever persisted — never frames or images. Set
-//! EYEFD_HOME to relocate the directory (tests).
+//! BLINKWELL_HOME to relocate the directory (tests).
 
 use crate::baseline::{contribute, empty_baseline, normalize_baseline, BaselineStats};
 use crate::session::QuickCheckResult;
@@ -14,14 +14,22 @@ use std::io::Write;
 use std::path::PathBuf;
 
 pub fn data_dir() -> PathBuf {
-    if let Ok(env) = std::env::var("EYEFD_HOME") {
+    if let Ok(env) = std::env::var("BLINKWELL_HOME") {
         if !env.is_empty() {
             return PathBuf::from(env);
         }
     }
-    directories::BaseDirs::new()
-        .map(|b| b.home_dir().join(".eyefd"))
-        .unwrap_or_else(|| PathBuf::from(".eyefd"))
+    let home = directories::BaseDirs::new()
+        .map(|b| b.home_dir().to_path_buf())
+        .unwrap_or_else(|| PathBuf::from("."));
+    let dir = home.join(".blinkwell");
+    // One-time migration from the pre-rename location — keeps existing
+    // history/baseline from installs before the blinkwell rename.
+    let old = home.join(".eyefd");
+    if !dir.exists() && old.is_dir() {
+        let _ = fs::rename(&old, &dir);
+    }
+    dir
 }
 
 fn baseline_path() -> PathBuf {
@@ -61,7 +69,7 @@ pub fn update_baseline(
     let next = contribute(b, r);
     let p = baseline_path();
     if let Some(parent) = p.parent() {
-        fs::create_dir_all(parent).context("create ~/.eyefd")?;
+        fs::create_dir_all(parent).context("create ~/.blinkwell")?;
     }
     fs::write(&p, serde_json::to_string(&next)?).context("write baseline.json")?;
     Ok(next)
@@ -81,7 +89,7 @@ pub fn reset_baseline() -> Result<()> {
 pub fn save_session(r: &QuickCheckResult) -> Result<()> {
     let p = history_path();
     if let Some(parent) = p.parent() {
-        fs::create_dir_all(parent).context("create ~/.eyefd")?;
+        fs::create_dir_all(parent).context("create ~/.blinkwell")?;
     }
     let mut f = fs::OpenOptions::new()
         .create(true)
