@@ -145,9 +145,8 @@ footer{padding:36px 0 48px;border-top:1px solid var(--line);margin-top:52px;font
 <section id="commands">
   <h2>Commands</h2>
   <div class="cmds">
-    <div class="row"><code>blinkwell</code><span>just this — it asks if you want to start monitoring</span></div>
-    <div class="row"><code>blinkwell check</code><span>checks your eyes once — about 90 seconds</span></div>
-    <div class="row"><code>blinkwell monitor</code><span>checks your eyes every 15 minutes and reminds you to rest</span></div>
+    <div class="row"><code>blinkwell</code><span>just this — it asks once, then monitors: ~60 seconds every ~15 minutes (adjustable)</span></div>
+    <div class="row"><code>blinkwell monitor</code><span>same as above, started right away</span></div>
     <div class="row"><code>blinkwell history</code><span>shows your past checks and trends in the terminal</span></div>
     <div class="row"><code>blinkwell report</code><span>opens a page with charts of all your checks</span></div>
   </div>
@@ -165,9 +164,8 @@ footer{padding:36px 0 48px;border-top:1px solid var(--line);margin-top:52px;font
     in your home directory. Delete the folder, everything is gone.</div>
     <div class="pitem"><b>One honest caveat.</b>The MediaPipe engine may send
     Google anonymous counters — like which feature ran and how long it took.
-    Your camera frames and results are never sent — they never leave the device.
-    Google's design, no off switch — block <code>play.googleapis.com</code> to
-    silence it.</div>
+    Your camera frames and results are never sent — they never leave the
+    device.</div>
     <div class="pitem"><b>Wellness tool, not a diagnosis.</b>blinkwell nudges better
     habits; it doesn't detect disease. Persistent symptoms → see a clinician.</div>
   </div>
