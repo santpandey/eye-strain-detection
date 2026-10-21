@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "blinkwell"
-version = "0.1.0"
+version = "0.1.1"
 description = "On-device eye-fatigue monitor — periodic camera windows, baseline, breaks"
 readme = "README.md"
 requires-python = ">=3.11"
