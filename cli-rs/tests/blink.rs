@@ -2,10 +2,10 @@
 //! state machine. Frame builders mirror tests/helpers.ts (30 fps clock,
 //! ear 0.3 / blink 0 open eyes).
 
-use eyefd::blink::{time_at_or_above, BlinkDetector, CcSample};
-use eyefd::config;
-use eyefd::features::FrameFeatures;
-use eyefd::quality::QualityCtx;
+use blinkwell::blink::{time_at_or_above, BlinkDetector, CcSample};
+use blinkwell::config;
+use blinkwell::features::FrameFeatures;
+use blinkwell::quality::QualityCtx;
 
 const FPS: f64 = 30.0;
 const DT: f64 = 1000.0 / FPS;
