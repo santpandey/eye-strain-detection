@@ -215,6 +215,11 @@ version bump MUST land before the tag. In order:
 
 Hard rules learned the hard way:
 
+- **Shipped-logic changes warrant a release.** A tag is a frozen snapshot —
+  commits landing on main after it never reach users until the next tag.
+  After any change to `cli-rs/` or `cli/` core logic (or site/docs copy that
+  describes new behavior), cut a new `vX.Y.Z` the same day — never let the
+  site or README promise behavior `releases/latest` can't deliver.
 - **PyPI is immutable**: a tag pointing at a commit whose pyproject version
   already exists on PyPI fails with "File already exists". Never retag to
   "re-publish" — bump the version instead.
