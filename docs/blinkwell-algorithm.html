@@ -115,6 +115,11 @@ the device; no video ever leaves it.</p>
   <li><b>Fully on-device</b> — the model is a small file (~MB) embedded in our app/CLI; it needs
       no internet and runs on CPU (XNNPACK) or browser GPU (WebGL/wasm).</li>
 </ul>
+<p><b>A note on provenance:</b> Google ships no official Rust bindings, so our Rust CLI calls the
+engine through a small, pinned community crate (<code>mediapipe 0.1</code>) — a thin FFI shim with
+no ML code of its own. The engine it loads is the <b>official Google C-API build</b>, fetched once
+from Google's own PyPI wheel with a pinned SHA-256 checksum — the same binary Google's Python
+bindings run on.</p>
 <p>Equally important — what it is <b>not</b> used for: no face recognition or identification, no
 images stored, no cloud calls for video. Frames are processed in memory and discarded
 immediately; only summary numbers (the signals above) are saved to the user's own history file.</p>
