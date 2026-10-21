@@ -4,8 +4,7 @@
 # Downloads the latest release binary for your OS/arch and puts it on PATH.
 set -eu
 
-# TODO: set to the real GitHub repo (owner/name) once created.
-REPO="${EYEFD_REPO:-OWNER/REPO}"
+REPO="${EYEFD_REPO:-santpandey/eye-strain-detection}"
 
 os="$(uname -s | tr '[:upper:]' '[:lower:]')"
 arch="$(uname -m)"

@@ -2,8 +2,7 @@
 #   irm https://<site>/install.ps1 | iex
 $ErrorActionPreference = 'Stop'
 
-# TODO: set to the real GitHub repo (owner/name) once created.
-$Repo = if ($env:EYEFD_REPO) { $env:EYEFD_REPO } else { 'OWNER/REPO' }
+$Repo = if ($env:EYEFD_REPO) { $env:EYEFD_REPO } else { 'santpandey/eye-strain-detection' }
 
 $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64' }
 $asset = "eyefd-windows-$arch.zip"
