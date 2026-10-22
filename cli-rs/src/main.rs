@@ -1157,16 +1157,99 @@ fn update_asset_name() -> Option<String> {
 
 /// curl → captured stdout. curl is our zero-dep HTTP tool (same pattern as
 /// the ffmpeg subprocess in replay): ships with Windows 10+, macOS and every
-/// linux distro, and handles TLS/proxies/redirects correctly everywhere.
-fn curl_out(args: &[&str]) -> Result<String> {
-    let out = Command::new("curl")
-        .args(args)
+/// linux distro. If the spawn itself fails (curl absent — minimal distros,
+/// containers), wget is the universal fallback.
+fn fetch_text(url: &str) -> Result<String> {
+    match Command::new("curl")
+        .args(["-fsSL", "-H", "User-Agent: blinkwell", url])
         .output()
-        .context("curl not found — install it or update via the website installer")?;
-    if !out.status.success() {
-        bail!("{}", String::from_utf8_lossy(&out.stderr).trim());
+    {
+        Ok(out) if out.status.success() => Ok(String::from_utf8_lossy(&out.stdout).into_owned()),
+        Ok(out) => bail!("{}", String::from_utf8_lossy(&out.stderr).trim()),
+        Err(_) => {
+            let out = Command::new("wget")
+                .args(["-qO-", url])
+                .output()
+                .context("need curl or wget to update — or use the website installer")?;
+            if !out.status.success() {
+                bail!("{}", String::from_utf8_lossy(&out.stderr).trim());
+            }
+            Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+        }
     }
-    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+/// Download `url` to `dest` with a single-line progress bar (suppressed in
+/// quiet/--json mode). Same curl→wget fallback as fetch_text.
+fn download(url: &str, dest: &Path, quiet: bool) -> Result<()> {
+    let curl_args: &[&str] = if quiet {
+        &["-fsSL", "-o"]
+    } else {
+        &["-fL", "-sS", "--progress-bar", "-o"]
+    };
+    let st = match Command::new("curl")
+        .args(curl_args)
+        .arg(dest)
+        .arg(url)
+        .status()
+    {
+        Ok(st) => st,
+        Err(_) => {
+            let wget_args: &[&str] = if quiet {
+                &["-q", "-O"]
+            } else {
+                &["-q", "--show-progress", "-O"]
+            };
+            Command::new("wget")
+                .args(wget_args)
+                .arg(dest)
+                .arg(url)
+                .status()
+                .context("need curl or wget to update — or use the website installer")?
+        }
+    };
+    if !st.success() {
+        bail!("download failed ({url})");
+    }
+    Ok(())
+}
+
+/// Unpack the release archive into `dir`. Windows → PowerShell
+/// Expand-Archive (PATH `tar` may be GNU tar under Git Bash, which can't
+/// read zips; `unzip` is the fallback when powershell can't spawn). Unix →
+/// tar, which every distro/macOS ships.
+fn unpack(pkg: &Path, dir: &Path, asset: &str) -> Result<()> {
+    #[cfg(windows)]
+    let st = match Command::new("powershell")
+        .args(["-NoProfile", "-Command"])
+        .arg(format!(
+            "Expand-Archive -LiteralPath '{}' -DestinationPath '{}' -Force",
+            pkg.display(),
+            dir.display()
+        ))
+        .status()
+    {
+        Ok(s) => s,
+        Err(_) => Command::new("unzip")
+            .args(["-o", "-q"])
+            .arg(pkg)
+            .arg("-d")
+            .arg(dir)
+            .status()
+            .context("couldn't unpack the update archive (no powershell or unzip)")?,
+    };
+    #[cfg(not(windows))]
+    let st = Command::new("tar")
+        .arg("-xzf")
+        .arg(pkg)
+        .arg("-C")
+        .arg(dir)
+        .status()
+        .context("tar not found — needed to unpack the update")?;
+    if !st.success() {
+        bail!("couldn't unpack {asset}");
+    }
+    Ok(())
 }
 
 /// `blinkwell update`: fetch the newest GitHub Release and swap this binary
@@ -1198,8 +1281,7 @@ fn cmd_update(json: bool) -> Result<()> {
     // Latest release tag → compare with this build's version.
     let repo = std::env::var("BLINKWELL_REPO").unwrap_or_else(|_| UPDATE_REPO.to_string());
     let api = format!("https://api.github.com/repos/{repo}/releases/latest");
-    let body = curl_out(&["-fsSL", "-H", "User-Agent: blinkwell", &api])
-        .context("fetching the latest release info")?;
+    let body = fetch_text(&api).context("fetching the latest release info")?;
     let tag = serde_json::from_str::<serde_json::Value>(&body)
         .context("release API returned unexpected JSON")?["tag_name"]
         .as_str()
@@ -1230,38 +1312,8 @@ fn cmd_update(json: bool) -> Result<()> {
     let dir = std::env::temp_dir().join(format!("blinkwell-update-{}", uuid::Uuid::new_v4()));
     fs::create_dir_all(&dir)?;
     let pkg = dir.join(&asset);
-    let dl = Command::new("curl")
-        .args(["-fL", "-sS", "--progress-bar", "-o"])
-        .arg(&pkg)
-        .arg(&url)
-        .status()
-        .context("curl not found — install it or update via the website installer")?;
-    if !dl.success() {
-        bail!("download failed ({url})");
-    }
-    // Unpack: Windows → PowerShell Expand-Archive (handles .zip natively;
-    // PATH `tar` may be GNU tar which can't read zips). Unix → tar (.tar.gz).
-    let st = if cfg!(windows) {
-        Command::new("powershell")
-            .args(["-NoProfile", "-Command"])
-            .arg(format!(
-                "Expand-Archive -LiteralPath '{}' -DestinationPath '{}' -Force",
-                pkg.display(),
-                dir.display()
-            ))
-            .status()
-    } else {
-        Command::new("tar")
-            .arg("-xzf")
-            .arg(&pkg)
-            .arg("-C")
-            .arg(&dir)
-            .status()
-    }
-    .context("couldn't unpack the update archive")?;
-    if !st.success() {
-        bail!("couldn't unpack {asset}");
-    }
+    download(&url, &pkg, json)?;
+    unpack(&pkg, &dir, &asset)?;
     let new = dir.join(if cfg!(windows) {
         "blinkwell.exe"
     } else {
