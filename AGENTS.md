@@ -140,7 +140,9 @@ camera → MediaPipe FaceLandmarker (`mediapipe` crate, CPU/XNNPACK) →
 → `QuickCheckResult`. Commands: `check` (live quick check), `monitor`
 (periodic ~60 s windows; the camera device is created only during a window so
 the LED is honestly off between windows), `replay` (video file via an ffmpeg
-subprocess — not bundled), `trace` (offline parity harness for
+subprocess — not bundled), `update` (self-update from the latest GitHub
+Release via curl; renames the running exe aside on Windows, Python-installed
+copies defer to pipx/uv instead), `trace` (offline parity harness for
 `scripts/eval-trace.ts`). Same privacy rule as the app: frames are processed
 in memory only; only summary metrics persist under `~/.blinkwell`
 (`BLINKWELL_HOME` overrides for tests).

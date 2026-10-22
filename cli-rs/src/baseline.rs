@@ -6,7 +6,7 @@
 //! persistence lives in storage.rs.
 
 use crate::config;
-use crate::session::QuickCheckResult;
+use crate::session::{QuickCheckResult, Source};
 use crate::thresholds::{Metric, Status};
 use serde::{Deserialize, Serialize};
 
@@ -200,7 +200,12 @@ fn result_value(r: &QuickCheckResult, m: BaselineMetric) -> f64 {
 /// for sessions that were actually saved — never abstained (low-confidence)
 /// ones. A metric's value is skipped when the session couldn't measure it
 /// (status 'na'), it isn't finite, or there was no usable footage at all.
+/// Non-camera sessions (file replays, traces) are dev data, not physiology —
+/// they must never shift the user's personal baseline.
 pub fn contribute(b: &BaselineStats, r: &QuickCheckResult) -> BaselineStats {
+    if !matches!(r.source, Some(Source::Camera) | Some(Source::Monitor)) {
+        return b.clone();
+    }
     let mut next = BaselineStats {
         version: 1,
         sessions: b.sessions + 1,

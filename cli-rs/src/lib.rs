@@ -17,5 +17,6 @@ pub mod report;
 pub mod rules;
 pub mod score;
 pub mod session;
+pub mod stderr_filter;
 pub mod storage;
 pub mod thresholds;

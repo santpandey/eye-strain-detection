@@ -26,7 +26,9 @@ url="https://github.com/${REPO}/releases/latest/download/${asset}"
 
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 echo "blinkwell: downloading ${asset}"
-curl -fsSL "$url" -o "$tmp/$asset"
+# --progress-bar draws a single-line meter (auto-disabled when stderr isn't
+# a terminal, e.g. CI logs); -f still fails hard on HTTP errors.
+curl -fL --progress-bar "$url" -o "$tmp/$asset"
 tar -xzf "$tmp/$asset" -C "$tmp"
 
 bin_dir="$HOME/.local/bin"

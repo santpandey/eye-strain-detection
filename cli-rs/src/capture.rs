@@ -387,12 +387,17 @@ where
 
 /// Target zone for alignment, in normalized eye-midpoint coordinates.
 /// X is image-space (unmirrored): image-left is the user's right side.
-const ALIGN_CX: (f64, f64) = (0.40, 0.60);
-const ALIGN_CY: (f64, f64) = (0.30, 0.55);
+/// Deliberately looser than the app's center box — "roughly in frame" is
+/// all we need before capture starts.
+const ALIGN_CX: (f64, f64) = (0.30, 0.70);
+const ALIGN_CY: (f64, f64) = (0.25, 0.58);
 /// Eye separation as a fraction of frame width — the distance proxy.
-const ALIGN_SIZE: (f64, f64) = (0.10, 0.30);
+const ALIGN_SIZE: (f64, f64) = (0.08, 0.35);
 /// Consecutive-aligned time required before the check starts.
 const ALIGN_HOLD_MS: u64 = 1_000;
+/// Lines drawn by `draw_align_ui` (prompt + top + 15 rows + bottom + hint) —
+/// the erase sequence must move up exactly this many.
+const ALIGN_UI_LINES: usize = 19;
 
 fn align_ok(face: bool, cx: f64, cy: f64, size: f64) -> bool {
     face && cx >= ALIGN_CX.0
@@ -430,24 +435,37 @@ fn align_hint(face: bool, cx: f64, cy: f64, size: f64) -> String {
     }
 }
 
-/// Draw the alignment boundary box in place (11 lines) using ANSI cursor
-/// control. `first` controls whether we move the cursor up before redrawing.
-fn draw_align_ui(
+/// What the alignment phase measured this frame — bundled to keep
+/// `draw_align_ui`'s signature small.
+struct AlignUi<'a> {
     face: bool,
     cx: f64,
     cy: f64,
     ok: bool,
     held_s: f64,
-    hint: &str,
-    first: &mut bool,
-) {
+    remaining_s: f64,
+    hint: &'a str,
+}
+
+/// Draw the alignment boundary box in place (ALIGN_UI_LINES lines) using ANSI
+/// cursor control. `first` controls whether we move the cursor up before redrawing.
+fn draw_align_ui(u: &AlignUi, first: &mut bool) {
+    let AlignUi {
+        face,
+        cx,
+        cy,
+        ok,
+        held_s,
+        remaining_s,
+        hint,
+    } = *u;
     const W: usize = 45;
     const H: usize = 15;
-    // Fixed target box: cols 17..=28, rows 4..=10 of the interior grid.
-    const C0: usize = 17;
-    const C1: usize = 28;
+    // Target box: cols 13..=31, rows 4..=9 — roughly maps the ALIGN_* zone.
+    const C0: usize = 13;
+    const C1: usize = 31;
     const R0: usize = 4;
-    const R1: usize = 10;
+    const R1: usize = 9;
     // Center the whole block horizontally in the terminal.
     let term_w = terminal_size::terminal_size()
         .map(|(terminal_size::Width(w), _)| w as usize)
@@ -456,9 +474,9 @@ fn draw_align_ui(
     let fc = (cx * (W - 1) as f64).round().clamp(0.0, (W - 1) as f64) as usize;
     let fr = (cy * (H - 1) as f64).round().clamp(0.0, (H - 1) as f64) as usize;
 
-    let mut lines = Vec::with_capacity(H + 4);
+    let mut lines = Vec::with_capacity(ALIGN_UI_LINES);
     lines.push(format!(
-        "{pad}align your face inside the frame   (Enter to skip)"
+        "{pad}keep the dot inside the box   (Enter = start now)"
     ));
     lines.push(format!("{pad}┌{}┐", "─".repeat(W)));
     for r in 0..H {
@@ -485,7 +503,12 @@ fn draw_align_ui(
         lines.push(format!("{pad}│{}│", row.iter().collect::<String>()));
     }
     lines.push(format!("{pad}└{}┘", "─".repeat(W)));
-    lines.push(format!("{pad}{hint:<46} {held_s:.1}/1.0 s"));
+    let tail = if ok {
+        format!("{held_s:.1}/1.0 s held")
+    } else {
+        format!("auto-start in {remaining_s:.0} s")
+    };
+    lines.push(format!("{pad}{hint:<40} {tail}"));
 
     if !*first {
         print!("\x1b[{}A", lines.len());
@@ -568,24 +591,29 @@ where
                         .map(|t| t.elapsed().as_secs_f64())
                         .unwrap_or(0.0);
                     draw_align_ui(
-                        face,
-                        cx,
-                        cy,
-                        ok,
-                        held_s,
-                        &align_hint(face, cx, cy, size),
+                        &AlignUi {
+                            face,
+                            cx,
+                            cy,
+                            ok,
+                            held_s,
+                            remaining_s: align_timeout_ms / 1000.0 - t0.elapsed().as_secs_f64(),
+                            hint: &align_hint(face, cx, cy, size),
+                        },
                         &mut first_draw,
                     );
                 }
             }
             if drew {
-                // Erase the 11-line UI, then report — the box must not linger
-                // and distract during the actual capture.
-                print!("\x1b[11A\x1b[J");
+                // Erase the whole UI block, then report — the box must not
+                // linger and distract during the actual capture.
+                print!("\x1b[{ALIGN_UI_LINES}A\x1b[J");
                 if aligned_since.is_some() {
                     println!("aligned — capture starting (LED stays on)");
                 } else {
-                    println!("couldn't confirm alignment — capturing anyway");
+                    println!(
+                        "face not centered — starting anyway (the check pauses when you look away)"
+                    );
                 }
             }
         }

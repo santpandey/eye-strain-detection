@@ -1,6 +1,6 @@
 [package]
 name = "blinkwell"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 description = "On-device eye-fatigue monitor — the web app's analysis pipeline as a local process"
 license = "MIT"

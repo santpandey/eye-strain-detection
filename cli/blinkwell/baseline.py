@@ -112,7 +112,11 @@ def contribute(b: dict, r: dict) -> dict:
     """Fold one saved session into the baseline (returns a new record). Call only
     for sessions that were actually saved — never abstained (low-confidence)
     ones. A metric's value is skipped when the session couldn't measure it
-    (status 'na'), it isn't finite, or there was no usable footage at all."""
+    (status 'na'), it isn't finite, or there was no usable footage at all.
+    Non-camera sessions (file replays, traces) are dev data, not physiology —
+    they must never shift the user's personal baseline."""
+    if r.get("source") not in ("camera", "monitor"):
+        return dict(b)
     nxt = {
         "version": 1,
         "sessions": b["sessions"] + 1,

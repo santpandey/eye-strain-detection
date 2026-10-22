@@ -449,6 +449,18 @@ def main(argv=None) -> int:
     common(p)
     p.set_defaults(fn=cmd_trace)
 
+    # Python installs update through the package manager that owns the
+    # entrypoint — self-swapping a launcher exe would corrupt the venv.
+    def _update(args):
+        print("blinkwell: this install is managed by your package manager — run:")
+        print("    pipx upgrade blinkwell      # if installed via pipx")
+        print("    pip install -U blinkwell    # if installed via pip")
+        print("(uvx always fetches the latest version automatically)")
+        return 0
+
+    p = sub.add_parser("update", help="how to update this install")
+    p.set_defaults(fn=_update)
+
     _fix_console_encoding()  # before parse_args so --help prints cleanly too
     args = ap.parse_args(argv)
     try:

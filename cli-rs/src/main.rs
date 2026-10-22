@@ -6,10 +6,11 @@
 //!   monitor  periodic ~60 s camera windows every ~10 min; camera LED is ON
 //!            only during a window — between windows the device is released
 //!   replay   run a video file through the same pipeline (source 'file')
+//!   update   download the latest release and replace this binary in place
 //!   trace    replay a recorded trace JSON through the Rust pipeline and
 //!            score it against labels (parity tool for scripts/eval-trace.ts)
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use blinkwell::capture::{self, FrameOut, LandmarkerEngine};
 use blinkwell::config;
 use blinkwell::eval::match_blinks;
@@ -25,8 +26,10 @@ use blinkwell::thresholds::{Status, DISCLAIMER};
 use clap::{Parser, Subcommand};
 use serde::Serialize;
 use std::collections::HashMap;
+use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -74,7 +77,7 @@ enum Cmd {
         #[arg(long, default_value_t = 0)]
         camera: u32,
         /// Seconds to spend on face alignment first (0 = skip the guide).
-        #[arg(long, default_value_t = 30.0)]
+        #[arg(long, default_value_t = 20.0)]
         align_timeout: f64,
         /// Machine-readable output lines.
         #[arg(long)]
@@ -117,6 +120,12 @@ enum Cmd {
         /// ffmpeg executable path (default: found on PATH).
         #[arg(long)]
         ffmpeg: Option<PathBuf>,
+    },
+    /// Download the latest release and replace this binary in place.
+    Update {
+        /// Machine-readable output lines.
+        #[arg(long)]
+        json: bool,
     },
     /// Replay a recorded trace JSON (+ optional labels scoring).
     Trace {
@@ -176,6 +185,19 @@ fn print_result_card(r: &QuickCheckResult, score_out: Option<&FatigueScoreOut>, 
                 "  Fatigue score: {:.0}/100  ({anchor}; higher = more tired)",
                 score
             );
+            if out.baseline_ready {
+                let deltas: Vec<String> = out
+                    .parts
+                    .iter()
+                    .filter_map(|p| {
+                        p.delta_pct
+                            .map(|d| format!("{} {}", p.label, blinkwell::baseline::delta_text(d)))
+                    })
+                    .collect();
+                if !deltas.is_empty() {
+                    println!("  vs your usual: {}", deltas.join(" · "));
+                }
+            }
         }
     } else if let Some(fs) = r.fatigue_score {
         println!("  Fatigue score: {:.0}/100  (higher = more tired)", fs);
@@ -337,6 +359,25 @@ struct JsonResult<'a> {
     result: &'a QuickCheckResult,
 }
 
+/// Low-confidence abstain: a compact block — metrics from a mostly-failed
+/// check would only mislead. Nothing is saved or learned.
+fn print_abstain_card(r: &QuickCheckResult) {
+    let bar = "─".repeat(52);
+    println!("{bar}");
+    println!("  Not enough usable footage — nothing saved, score unchanged.");
+    println!(
+        "  ({:.0} s usable of {:.0} s captured · confidence: {})",
+        r.quality_ms / 1000.0,
+        r.duration_ms / 1000.0,
+        r.confidence.as_str()
+    );
+    for reason in &r.confidence_reasons {
+        println!("    - {} → {}", reason.text, reason.fix);
+    }
+    println!("  Face the camera with decent light; the check pauses whenever you look away.");
+    println!("{bar}");
+}
+
 /// Shared check/replay tail: abstain on low confidence, else score vs
 /// baseline → learn → save (same order as the app).
 fn finish_result(mut r: QuickCheckResult, json_mode: bool) -> QuickCheckResult {
@@ -352,7 +393,7 @@ fn finish_result(mut r: QuickCheckResult, json_mode: bool) -> QuickCheckResult {
                 .unwrap_or_default()
             );
         } else {
-            print_result_card(&r, None, false);
+            print_abstain_card(&r);
         }
         return r;
     }
@@ -387,7 +428,8 @@ fn cmd_check(
     let mut engine = LandmarkerEngine::new(&model_path)?;
     if !json {
         println!(
-            "blinkwell check — camera on for {seconds:.0} s (webcam light on = honest signal)"
+            "blinkwell check — {seconds:.0} s of usable footage; it pauses if your face leaves view \
+             (camera LED on = it's really on)"
         );
     }
     let cancel = cancel_flag();
@@ -978,6 +1020,8 @@ fn cmd_history(n: usize, days: u32, group: &str, metric: &str) -> Result<()> {
 }
 
 fn main() {
+    // Silence native-lib logging (absl/TFLite writes straight to fd 2).
+    blinkwell::stderr_filter::install();
     let cli = Cli::parse();
     let result = match &cli.cmd {
         // Bare `blinkwell`: yes/no entry point — no flags to learn.
@@ -1052,6 +1096,7 @@ fn main() {
             model,
             ffmpeg,
         }) => cmd_replay(video, *json, model, ffmpeg),
+        Some(Cmd::Update { json }) => cmd_update(*json),
         Some(Cmd::Trace {
             traces,
             labels,
@@ -1071,4 +1116,182 @@ fn main() {
             std::process::exit(1);
         }
     }
+}
+
+// ------------------------------------------------------------ self-update --
+
+/// GitHub repo that owns the release assets (`OWNER/REPO`); BLINKWELL_REPO
+/// overrides for forks/tests. Same value the installers hardcode.
+const UPDATE_REPO: &str = "santpandey/eye-strain-detection";
+
+/// `x.y.z` → sortable tuple, tolerant of a leading 'v' and missing parts.
+fn version_key(v: &str) -> (u64, u64, u64) {
+    let mut it = v.trim().trim_start_matches('v').split('.');
+    let f = |s: Option<&str>| s.and_then(|x| x.trim().parse().ok()).unwrap_or(0);
+    (f(it.next()), f(it.next()), f(it.next()))
+}
+
+/// Release asset name for this build's OS/arch, e.g.
+/// `blinkwell-windows-x64.zip`. None on platforms the workflow doesn't ship
+/// (linux-arm64, intel mac → those users take the pip package).
+fn update_asset_name() -> Option<String> {
+    let os = if cfg!(target_os = "windows") {
+        "windows"
+    } else if cfg!(target_os = "macos") {
+        "macos"
+    } else if cfg!(target_os = "linux") {
+        "linux"
+    } else {
+        return None;
+    };
+    let arch = if cfg!(target_arch = "x86_64") {
+        "x64"
+    } else if cfg!(target_arch = "aarch64") {
+        "arm64"
+    } else {
+        return None;
+    };
+    let ext = if cfg!(windows) { "zip" } else { "tar.gz" };
+    Some(format!("blinkwell-{os}-{arch}.{ext}"))
+}
+
+/// curl → captured stdout. curl is our zero-dep HTTP tool (same pattern as
+/// the ffmpeg subprocess in replay): ships with Windows 10+, macOS and every
+/// linux distro, and handles TLS/proxies/redirects correctly everywhere.
+fn curl_out(args: &[&str]) -> Result<String> {
+    let out = Command::new("curl")
+        .args(args)
+        .output()
+        .context("curl not found — install it or update via the website installer")?;
+    if !out.status.success() {
+        bail!("{}", String::from_utf8_lossy(&out.stderr).trim());
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+/// `blinkwell update`: fetch the newest GitHub Release and swap this binary
+/// in place. Windows can't overwrite a running exe but CAN rename it, so we
+/// rename the old one aside (cleaned up on the next update) and move the new
+/// one into its spot; on unix rename simply replaces.
+fn cmd_update(json: bool) -> Result<()> {
+    let say = |msg: &str| {
+        if !json {
+            println!("{msg}");
+        }
+    };
+
+    // Python installs (pipx/uv) shouldn't self-update: their exe is a tiny
+    // launcher owned by the package manager, and uvx resolves the latest
+    // version on every run anyway.
+    let exe = std::env::current_exe().context("locating this executable")?;
+    let near_python = exe
+        .ancestors()
+        .take(3)
+        .any(|d| d.join("pyvenv.cfg").exists());
+    if near_python {
+        say("blinkwell: this install came via a Python package manager — run:");
+        say("    pipx upgrade blinkwell    # pipx installs");
+        say("    # uvx always fetches the latest version automatically");
+        return Ok(());
+    }
+
+    // Latest release tag → compare with this build's version.
+    let repo = std::env::var("BLINKWELL_REPO").unwrap_or_else(|_| UPDATE_REPO.to_string());
+    let api = format!("https://api.github.com/repos/{repo}/releases/latest");
+    let body = curl_out(&["-fsSL", "-H", "User-Agent: blinkwell", &api])
+        .context("fetching the latest release info")?;
+    let tag = serde_json::from_str::<serde_json::Value>(&body)
+        .context("release API returned unexpected JSON")?["tag_name"]
+        .as_str()
+        .unwrap_or("")
+        .trim_start_matches('v')
+        .to_string();
+    if tag.is_empty() {
+        bail!("release API returned no tag_name");
+    }
+    let cur = env!("CARGO_PKG_VERSION");
+    if json {
+        println!(
+            "{{\"type\":\"update\",\"current\":\"{cur}\",\"latest\":\"{tag}\",\
+             \"updateAvailable\":{}}}",
+            version_key(&tag) > version_key(cur)
+        );
+    }
+    if version_key(&tag) <= version_key(cur) {
+        say(&format!("blinkwell is up to date (v{cur})"));
+        return Ok(());
+    }
+    let asset = update_asset_name()
+        .context("no prebuilt binary for this platform — use `uvx blinkwell` instead")?;
+    let url = format!("https://github.com/{repo}/releases/latest/download/{asset}");
+    say(&format!("blinkwell v{cur} → v{tag}"));
+
+    // Download + unpack into a scratch dir.
+    let dir = std::env::temp_dir().join(format!("blinkwell-update-{}", uuid::Uuid::new_v4()));
+    fs::create_dir_all(&dir)?;
+    let pkg = dir.join(&asset);
+    let dl = Command::new("curl")
+        .args(["-fL", "-sS", "--progress-bar", "-o"])
+        .arg(&pkg)
+        .arg(&url)
+        .status()
+        .context("curl not found — install it or update via the website installer")?;
+    if !dl.success() {
+        bail!("download failed ({url})");
+    }
+    // Unpack: Windows → PowerShell Expand-Archive (handles .zip natively;
+    // PATH `tar` may be GNU tar which can't read zips). Unix → tar (.tar.gz).
+    let st = if cfg!(windows) {
+        Command::new("powershell")
+            .args(["-NoProfile", "-Command"])
+            .arg(format!(
+                "Expand-Archive -LiteralPath '{}' -DestinationPath '{}' -Force",
+                pkg.display(),
+                dir.display()
+            ))
+            .status()
+    } else {
+        Command::new("tar")
+            .arg("-xzf")
+            .arg(&pkg)
+            .arg("-C")
+            .arg(&dir)
+            .status()
+    }
+    .context("couldn't unpack the update archive")?;
+    if !st.success() {
+        bail!("couldn't unpack {asset}");
+    }
+    let new = dir.join(if cfg!(windows) {
+        "blinkwell.exe"
+    } else {
+        "blinkwell"
+    });
+    if !new.exists() {
+        bail!("update archive didn't contain the blinkwell binary");
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&new, fs::Permissions::from_mode(0o755))?;
+    }
+
+    // Swap in place; roll back if the move fails.
+    let old = exe.with_extension("old");
+    let _ = fs::remove_file(&old); // stale backup from a previous update
+    fs::rename(&exe, &old).with_context(|| {
+        format!(
+            "can't move {} aside — is it write-protected?",
+            exe.display()
+        )
+    })?;
+    if let Err(e) = fs::rename(&new, &exe) {
+        let _ = fs::rename(&old, &exe);
+        return Err(e).with_context(|| format!("can't install to {}", exe.display()));
+    }
+    let _ = fs::remove_dir_all(&dir);
+    say(&format!(
+        "blinkwell updated to v{tag} — restart it to use the new version"
+    ));
+    Ok(())
 }
