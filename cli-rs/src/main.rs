@@ -1160,15 +1160,30 @@ fn update_asset_name() -> Option<String> {
 /// linux distro. If the spawn itself fails (curl absent — minimal distros,
 /// containers), wget is the universal fallback.
 fn fetch_text(url: &str) -> Result<String> {
-    match Command::new("curl")
-        .args(["-fsSL", "-H", "User-Agent: blinkwell", url])
-        .output()
-    {
+    // BLINKWELL_GITHUB_TOKEN authenticates the API call — the unauthenticated
+    // 60/hr/IP rate limit is easily exhausted on shared egress (CI runners,
+    // corp proxies).
+    let token = std::env::var("BLINKWELL_GITHUB_TOKEN")
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    let auth = format!("Authorization: Bearer {token}");
+    let mut curl_args = vec!["-fsSL", "-H", "User-Agent: blinkwell"];
+    if !token.is_empty() {
+        curl_args.extend(["-H", auth.as_str()]);
+    }
+    curl_args.push(url);
+    match Command::new("curl").args(&curl_args).output() {
         Ok(out) if out.status.success() => Ok(String::from_utf8_lossy(&out.stdout).into_owned()),
         Ok(out) => bail!("{}", String::from_utf8_lossy(&out.stderr).trim()),
         Err(_) => {
+            let mut wget_args = vec!["-qO-"];
+            if !token.is_empty() {
+                wget_args.extend(["--header", auth.as_str()]);
+            }
+            wget_args.push(url);
             let out = Command::new("wget")
-                .args(["-qO-", url])
+                .args(&wget_args)
                 .output()
                 .context("need curl or wget to update — or use the website installer")?;
             if !out.status.success() {

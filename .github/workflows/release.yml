@@ -28,11 +28,14 @@ jobs:
         run: cargo build --release --manifest-path cli-rs/Cargo.toml --target ${{ matrix.target }}
       - name: Smoke-test `update` plumbing on this OS
         # Exercises the GitHub API call + version compare on every matrix OS.
-        # On tag builds the release doesn't exist yet, so updateAvailable
-        # flips true — either way exit 0 means the plumbing works.
+        # GITHUB_TOKEN avoids the 60/hr unauthenticated rate limit on shared
+        # CI egress. Non-blocking: a network flake must never gate a release.
+        env:
+          BLINKWELL_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          ./cli-rs/target/${{ matrix.target }}/release/blinkwell update --json || \
-          ./cli-rs/target/${{ matrix.target }}/release/blinkwell.exe update --json
+          (./cli-rs/target/${{ matrix.target }}/release/blinkwell update --json || \
+           ./cli-rs/target/${{ matrix.target }}/release/blinkwell.exe update --json) || \
+          echo "::warning::update smoke test failed — non-blocking"
       - name: Package (unix)
         if: runner.os != 'Windows'
         run: |
