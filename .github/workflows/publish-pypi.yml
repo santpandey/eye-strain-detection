@@ -16,10 +16,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # PyPI rejects re-uploaded filenames forever — a moved/retried tag must
+      # no-op cleanly instead of failing red on "File already exists".
+      - name: Skip if this version already exists on PyPI
+        id: pypi
+        run: |
+          V="$(sed -n 's/^version = "\(.*\)"/\1/p' cli/pyproject.toml | head -1)"
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          if [ "$(curl -s -o /dev/null -w '%{http_code}' "https://pypi.org/pypi/blinkwell/$V/json")" = "200" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          fi
       - uses: astral-sh/setup-uv@v5
+        if: steps.pypi.outputs.exists != 'true'
       - name: Build
+        if: steps.pypi.outputs.exists != 'true'
         working-directory: cli
         run: uv build
       - name: Publish to PyPI
+        if: steps.pypi.outputs.exists != 'true'
         run: uv publish cli/dist/*
         # or: uv publish --token ${{ secrets.PYPI_API_TOKEN }} cli/dist/*
