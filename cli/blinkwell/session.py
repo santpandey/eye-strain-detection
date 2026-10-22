@@ -59,7 +59,10 @@ class QuickCheckAggregator:
     def begin(self) -> None:
         self.started_at = _iso_now()
 
-    def push(self, f: FrameFeatures) -> None:
+    def push(self, f: FrameFeatures) -> bool:
+        """Feed one frame; returns whether it passed the quality gates
+        (mirrors the Rust aggregator's bool return — monitor uses it for
+        usable-time capture)."""
         if self.started_at is None:
             self.begin()
         if self.trace_enabled:
@@ -87,7 +90,7 @@ class QuickCheckAggregator:
                 self._backlit_frames += 1
         if not v.ok:
             self._jaw_since = None
-            return
+            return False
         self.detector.push(f)
         self._lumas.append(f.faceLuma)
         self._squints.append((f.squintL + f.squintR) / 2)
@@ -102,6 +105,7 @@ class QuickCheckAggregator:
                 self._jaw_since = None
         else:
             self._jaw_since = None
+        return True
 
     @property
     def fps_mean(self) -> float:

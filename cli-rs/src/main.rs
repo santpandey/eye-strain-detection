@@ -548,13 +548,37 @@ fn cmd_monitor(
                 );
             }
             let mut agg = QuickCheckAggregator::new();
-            let cap = capture::run_camera(
+            // Wall-clock windows can't clear the confidence floor: a 60 s
+            // window yields <60 s usable footage (camera warmup alone costs
+            // ~2 s) → always "low". Capture usable-time instead (the session
+            // pauses when your face leaves view) + a 2 s slack so a
+            // --window-s 60 actually meets the 60 s medium floor.
+            let usable_target = window_ms + 2_000.0;
+            let mut last_status = -f64::INFINITY;
+            let cap = capture::run_camera_aligned(
                 &mut engine,
                 camera,
-                window_ms,
+                usable_target,
+                0.0, // no alignment guide in monitor — it's a background tool
+                false,
                 Some(cancel.clone()),
-                &mut |out: &FrameOut| agg.push(&out.features),
+                &mut |out: &FrameOut| {
+                    if !json && (out.elapsed_ms - last_status >= 5000.0 || out.n == 1) {
+                        last_status = out.elapsed_ms;
+                        print!(
+                            "\r  window {win_n} {:6.1}s  frames {:<5} {:<40}",
+                            out.elapsed_ms / 1000.0,
+                            out.n,
+                            ""
+                        );
+                        let _ = std::io::stdout().flush();
+                    }
+                    agg.push(&out.features)
+                },
             );
+            if !json {
+                println!();
+            }
             if let Err(e) = cap {
                 eprintln!("  camera error: {e:#}");
                 next_window_at = now_ms() + interval_ms;
@@ -593,7 +617,13 @@ fn cmd_monitor(
                     .unwrap_or_default()
                 );
             } else {
-                println!("  window {win_n}: low confidence — dropped (not saved)");
+                // Show why it dropped — "low confidence" alone teaches nothing.
+                let why = r
+                    .confidence_reasons
+                    .first()
+                    .map(|c| format!(" — {}", c.text.to_lowercase()))
+                    .unwrap_or_default();
+                println!("  window {win_n}: low confidence — dropped, not saved{why}");
             }
             next_window_at = now_ms() + interval_ms;
         }

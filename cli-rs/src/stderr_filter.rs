@@ -57,7 +57,10 @@ fn spawn_filter(mut rd: impl Read + Send + 'static, mut real: ManuallyDrop<std::
                     buf.extend_from_slice(&chunk[..n]);
                     let mut start = 0;
                     for (i, &b) in buf.iter().enumerate() {
-                        if b == b'\n' {
+                        // \r is a boundary too: in-place progress bars (curl
+                        // --progress-bar etc. on our inherited stderr) must
+                        // pass through live, not buffer until a newline.
+                        if b == b'\n' || b == b'\r' {
                             emit(&buf[start..=i]);
                             start = i + 1;
                         }

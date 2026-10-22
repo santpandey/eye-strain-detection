@@ -45,7 +45,8 @@ tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 # minimal distros/containers.
 dl() {
   if command -v curl >/dev/null 2>&1; then
-    curl -fL --progress-bar "$1" -o "$2"
+    # --retry rides out transient TLS/connection flakes (schannel 56 etc.).
+    curl -fL --progress-bar --retry 3 "$1" -o "$2"
   elif command -v wget >/dev/null 2>&1; then
     wget -q --show-progress "$1" -O "$2" || wget -q "$1" -O "$2"
   else

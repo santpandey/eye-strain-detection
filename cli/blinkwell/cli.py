@@ -293,9 +293,25 @@ def cmd_monitor(args) -> int:
                         f"[window {win_n} @ {time.strftime('%H:%M:%S')}] capturing {args.window_s:.0f}s…"
                     )
                 agg = QuickCheckAggregator()
+                # Wall-clock windows can't clear the confidence floor: a 60 s
+                # window yields <60 s usable footage (camera warmup alone
+                # costs ~2 s) → always "low". Count only quality-accepted
+                # time like the Rust monitor (session pauses when your face
+                # leaves view), + 2 s slack so --window-s 60 meets the floor.
+                usable_target = window_ms + 2_000.0
+                usable_ms = 0.0
+                last_t = time.perf_counter()
                 try:
-                    for f in iter_camera_features(engine, args.camera, window_ms):
-                        agg.push(f)
+                    for f in iter_camera_features(
+                        engine, args.camera, usable_target * 2.5  # wall cap = STRETCH×
+                    ):
+                        now_f = time.perf_counter()
+                        dt = (now_f - last_t) * 1000.0
+                        last_t = now_f
+                        if agg.push(f):
+                            usable_ms += dt
+                            if usable_ms >= usable_target:
+                                break
                 except RuntimeError as e:
                     print(f"  camera error: {e}", file=sys.stderr)
                     next_window_at = _now_ms() + interval_ms
@@ -317,7 +333,11 @@ def cmd_monitor(args) -> int:
                 elif args.json:
                     print(json.dumps({"type": "window", "window": win_n, "dropped": True, "result": r}), flush=True)
                 else:
-                    print(f"  window {win_n}: low confidence — dropped (not saved)")
+                    # Show why it dropped — "low confidence" alone teaches nothing.
+                    why = ""
+                    if r.get("confidenceReasons"):
+                        why = f" — {r['confidenceReasons'][0]['text'].lower()}"
+                    print(f"  window {win_n}: low confidence — dropped, not saved{why}")
                 next_window_at = _now_ms() + interval_ms
             refresh_reminders(now)
             # 1 s scheduler tick (app: TICK_MS); also caps Ctrl+C latency.
