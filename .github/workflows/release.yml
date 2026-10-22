@@ -26,6 +26,13 @@ jobs:
           targets: ${{ matrix.target }}
       - name: Build blinkwell
         run: cargo build --release --manifest-path cli-rs/Cargo.toml --target ${{ matrix.target }}
+      - name: Smoke-test `update` plumbing on this OS
+        # Exercises the GitHub API call + version compare on every matrix OS.
+        # On tag builds the release doesn't exist yet, so updateAvailable
+        # flips true — either way exit 0 means the plumbing works.
+        run: |
+          ./cli-rs/target/${{ matrix.target }}/release/blinkwell update --json || \
+          ./cli-rs/target/${{ matrix.target }}/release/blinkwell.exe update --json
       - name: Package (unix)
         if: runner.os != 'Windows'
         run: |
