@@ -27,10 +27,12 @@ use clap::{Parser, Subcommand};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::fs;
-use std::io::Write;
+use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::RecvTimeoutError;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -103,6 +105,20 @@ enum Cmd {
         /// Machine-readable output lines.
         #[arg(long)]
         json: bool,
+        /// Override face_landmarker.task path.
+        #[arg(long)]
+        model: Option<PathBuf>,
+    },
+    /// Internal: capture a single monitor window, emit JSON lines on stdout.
+    /// Spawned by `monitor` so a crash in native code kills only the window.
+    #[command(name = "__window", hide = true)]
+    Window {
+        /// Seconds of usable footage to capture.
+        #[arg(long)]
+        window_s: f64,
+        /// Camera index.
+        #[arg(long, default_value_t = 0)]
+        camera: u32,
         /// Override face_landmarker.task path.
         #[arg(long)]
         model: Option<PathBuf>,
@@ -513,8 +529,12 @@ fn cmd_monitor(
     let break_every_ms = break_every_min * 60_000.0;
     let snooze_ms = config::MONITOR_REMINDER_SNOOZE_MS;
 
-    let model_path = model_path(model);
-    let mut engine = LandmarkerEngine::new(&model_path)?;
+    // libmediapipe embeds a telemetry uploader thread that can SIGSEGV a
+    // long-lived process (catch_unwind can't help — it's a native thread).
+    // Each window therefore runs in a short-lived `__window` child process:
+    // a crash costs one window, never the monitor. Short-lived children also
+    // exit before the uploader's retry timer ever fires. The parent keeps no
+    // engine at all — camera + model fully unload between windows.
     let cancel = cancel_flag();
 
     let monitor_on_since = now_ms();
@@ -547,44 +567,50 @@ fn cmd_monitor(
                     chrono::Local::now().format("%H:%M:%S")
                 );
             }
-            let mut agg = QuickCheckAggregator::new();
-            // Wall-clock windows can't clear the confidence floor: a 60 s
-            // window yields <60 s usable footage (camera warmup alone costs
-            // ~2 s) → always "low". Capture usable-time instead (the session
-            // pauses when your face leaves view) + a 2 s slack so a
-            // --window-s 60 actually meets the 60 s medium floor.
-            let usable_target = window_ms + 2_000.0;
-            let mut last_status = -f64::INFINITY;
-            let cap = capture::run_camera_aligned(
-                &mut engine,
+            let outcome = run_window_child(
+                model,
                 camera,
-                usable_target,
-                0.0, // no alignment guide in monitor — it's a background tool
-                false,
-                Some(cancel.clone()),
-                &mut |out: &FrameOut| {
-                    if !json && (out.elapsed_ms - last_status >= 5000.0 || out.n == 1) {
-                        last_status = out.elapsed_ms;
+                window_s,
+                window_ms,
+                cancel.clone(),
+                |ems, n| {
+                    if json {
+                        println!(
+                            "{}",
+                            serde_json::json!({"type":"progress","window":win_n,"elapsedMs":ems,"frames":n})
+                        );
+                    } else {
                         print!(
                             "\r  window {win_n} {:6.1}s  frames {:<5} {:<40}",
-                            out.elapsed_ms / 1000.0,
-                            out.n,
+                            ems / 1000.0,
+                            n,
                             ""
                         );
                         let _ = std::io::stdout().flush();
                     }
-                    agg.push(&out.features)
                 },
             );
             if !json {
                 println!();
             }
-            if let Err(e) = cap {
-                eprintln!("  camera error: {e:#}");
-                next_window_at = now_ms() + interval_ms;
-                continue;
+            if cancel.load(Ordering::Relaxed) {
+                break;
             }
-            let mut r = agg.result(Source::Monitor);
+            let mut r = match outcome {
+                WindowOutcome::Result(r) => *r,
+                WindowOutcome::Failed(why) => {
+                    if json {
+                        println!(
+                            "{}",
+                            serde_json::json!({"type":"window","window":win_n,"dropped":true,"error":why})
+                        );
+                    } else {
+                        println!("  window {win_n}: {why} — dropped, monitor continues");
+                    }
+                    next_window_at = now_ms() + interval_ms;
+                    continue;
+                }
+            };
             last_window_result = None;
             if r.confidence != Confidence::Low {
                 // Score vs pre-update baseline → learn → save (app order).
@@ -685,10 +711,140 @@ fn cmd_monitor(
         std::thread::sleep(Duration::from_secs_f64(sleep_s));
     }
 
-    drop(engine);
     if !json {
         println!("\nmonitor stopped after {windows_done} window(s).");
     }
+    Ok(())
+}
+
+// ------------------------------------------------- supervised window child --
+
+enum WindowOutcome {
+    Result(Box<QuickCheckResult>),
+    /// Why the window produced no result (spawn error, crash, timeout).
+    Failed(String),
+}
+
+/// Spawn `blinkwell __window` and stream its JSON lines: `progress` lines
+/// feed `on_progress`, the final `result` line becomes the outcome. A native
+/// crash inside the child (e.g. libmediapipe's uploader) surfaces as a
+/// non-zero exit / closed stdout — one window lost, monitor survives.
+fn run_window_child(
+    model: &Option<PathBuf>,
+    camera: u32,
+    window_s: f64,
+    window_ms: f64,
+    cancel: Arc<AtomicBool>,
+    mut on_progress: impl FnMut(f64, u64),
+) -> WindowOutcome {
+    let exe = match std::env::current_exe() {
+        Ok(e) => e,
+        Err(e) => return WindowOutcome::Failed(format!("cannot locate own exe: {e}")),
+    };
+    let mut cmd = Command::new(exe);
+    cmd.arg("__window")
+        .arg("--window-s")
+        .arg(format!("{window_s}"))
+        .arg("--camera")
+        .arg(camera.to_string());
+    if let Some(m) = model {
+        cmd.arg("--model").arg(m);
+    }
+    cmd.stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit());
+    let mut child = match cmd.spawn() {
+        Ok(c) => c,
+        Err(e) => return WindowOutcome::Failed(format!("cannot spawn window child: {e}")),
+    };
+    let stdout = match child.stdout.take() {
+        Some(s) => s,
+        None => return WindowOutcome::Failed("child stdout unavailable".into()),
+    };
+    let (tx, rx) = std::sync::mpsc::channel::<String>();
+    std::thread::spawn(move || {
+        for l in BufReader::new(stdout).lines().map_while(Result::ok) {
+            if tx.send(l).is_err() {
+                break;
+            }
+        }
+    });
+    // Child's own cap is window_ms*2.5 wall-clock; the watchdog adds slack
+    // for engine/model warmup so the parent can never hang on a stuck child.
+    let deadline = now_ms() + window_ms * 2.5 + 90_000.0;
+    let mut result: Option<QuickCheckResult> = None;
+    loop {
+        match rx.recv_timeout(Duration::from_millis(200)) {
+            Ok(line) => {
+                if let Ok(v) = serde_json::from_str::<serde_json::Value>(&line) {
+                    match v.get("type").and_then(|t| t.as_str()) {
+                        Some("progress") => on_progress(
+                            v["elapsedMs"].as_f64().unwrap_or(0.0),
+                            v["frames"].as_u64().unwrap_or(0),
+                        ),
+                        Some("result") => result = serde_json::from_value(v["result"].clone()).ok(),
+                        _ => {}
+                    }
+                }
+            }
+            Err(RecvTimeoutError::Timeout) => {}
+            Err(RecvTimeoutError::Disconnected) => break,
+        }
+        if cancel.load(Ordering::Relaxed) {
+            let _ = child.kill();
+            break;
+        }
+        if now_ms() > deadline {
+            let _ = child.kill();
+            return WindowOutcome::Failed("timed out".into());
+        }
+    }
+    match child.wait() {
+        Ok(st) if st.success() => match result {
+            Some(r) => WindowOutcome::Result(Box::new(r)),
+            None => WindowOutcome::Failed("produced no result".into()),
+        },
+        Ok(st) => WindowOutcome::Failed(match st.code() {
+            Some(c) => format!("crashed (exit {c})"),
+            None => "crashed (killed by signal)".into(),
+        }),
+        Err(e) => WindowOutcome::Failed(format!("wait failed: {e}")),
+    }
+}
+
+/// `blinkwell __window` — one usable-time capture window as JSON lines:
+/// {"type":"progress",...} ticks then a final {"type":"result",result:{…}}.
+/// Used only by `monitor` (see run_window_child).
+fn cmd_window(window_s: f64, camera: u32, model: &Option<PathBuf>) -> Result<()> {
+    let model_path = model_path(model);
+    let mut engine = LandmarkerEngine::new(&model_path)?;
+    let cancel = cancel_flag();
+    let mut agg = QuickCheckAggregator::new();
+    // Usable-time target: window_s + 2 s slack so --window-s 60 clears the
+    // 60 s medium-confidence floor (camera warmup isn't footage).
+    let usable_target = window_s * 1000.0 + 2_000.0;
+    let mut last_status = -f64::INFINITY;
+    capture::run_camera_aligned(
+        &mut engine,
+        camera,
+        usable_target,
+        0.0, // no alignment guide — background window
+        false,
+        Some(cancel),
+        &mut |out: &FrameOut| {
+            if out.elapsed_ms - last_status >= 5000.0 || out.n == 1 {
+                last_status = out.elapsed_ms;
+                println!(
+                    "{}",
+                    serde_json::json!({"type":"progress","elapsedMs":out.elapsed_ms,"frames":out.n})
+                );
+                let _ = std::io::stdout().flush();
+            }
+            agg.push(&out.features)
+        },
+    )?;
+    let r = agg.result(Source::Monitor);
+    println!("{}", serde_json::json!({"type":"result","result":r}));
     Ok(())
 }
 
@@ -1120,6 +1276,11 @@ fn main() {
             *json,
             model,
         ),
+        Some(Cmd::Window {
+            window_s,
+            camera,
+            model,
+        }) => cmd_window(*window_s, *camera, model),
         Some(Cmd::Replay {
             video,
             json,

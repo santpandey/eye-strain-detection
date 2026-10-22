@@ -64,6 +64,16 @@ section.on{opacity:1;visibility:visible}
 .split .codebox{width:1120px;margin-top:18px}
 .split .codebox pre{padding:10px 20px;font-size:12px}
 
+/* report scene */
+.browser{width:1024px;border:1px solid var(--line);border-radius:10px;overflow:hidden;
+  box-shadow:0 24px 60px rgba(0,0,0,.5);background:#f4f1ea}
+.browser .tbar{background:#101a1d;border-bottom:1px solid var(--line)}
+.browser .addr{margin-left:10px;font:12px var(--mono);color:var(--mut);background:#0a1012;
+  border:1px solid var(--line);border-radius:6px;padding:3px 12px;flex:1;text-align:center}
+.browser img{width:100%;display:block}
+.cap{text-align:center;color:var(--txt);font-size:14px;margin-top:16px}
+.cap code{font-family:var(--mono);color:var(--acc-ink)}
+
 /* privacy + end */
 .bigline{font:600 30px/1.4 var(--sans);max-width:46ch}
 .bigline .hl{color:var(--acc-ink)}
@@ -129,6 +139,15 @@ section.on{opacity:1;visibility:visible}
   <section id="s5"><div class="term">
     <div class="tbar"><i></i><i></i><i></i><span>Terminal</span></div>
     <div class="tbody" id="t5" style="font-size:12.5px"></div>
+  </div></section>
+
+  <!-- S5b report — real generated history page -->
+  <section id="s5b"><div>
+    <div class="browser rv">
+      <div class="tbar"><i></i><i></i><i></i><span class="addr">~/.blinkwell/report.html</span></div>
+      <img src="assets/report.png" alt="blinkwell history report">
+    </div>
+    <div class="cap rv" style="transition-delay:.7s"><code>blinkwell report</code> — score trends &amp; session history, generated locally. Opens in your browser; nothing is uploaded.</div>
   </div></section>
 
   <!-- S6 monitor + update -->
@@ -336,9 +355,10 @@ const SCENES = [
   { id:"s3", t0:8.8,  t1:15.6, run:runS3 },
   { id:"s4", t0:15.6, t1:22.4, run:runS4 },
   { id:"s5", t0:22.4, t1:30.6, run:runS5 },
-  { id:"s6", t0:30.6, t1:35.8, run:runS6 },
-  { id:"s7", t0:35.8, t1:38.4 },
-  { id:"s8", t0:38.4, t1:40.0 },
+  { id:"s5b", t0:30.6, t1:37.8 },
+  { id:"s6", t0:37.8, t1:43.2, run:runS6 },
+  { id:"s7", t0:43.2, t1:46.0 },
+  { id:"s8", t0:46.0, t1:48.0 },
 ];
 const q = new URLSearchParams(location.search);
 const STILL = q.get("still");            // ?still=N → freeze scene N fully applied

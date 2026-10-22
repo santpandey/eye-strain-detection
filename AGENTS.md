@@ -147,6 +147,18 @@ copies defer to pipx/uv instead), `trace` (offline parity harness for
 in memory only; only summary metrics persist under `~/.blinkwell`
 (`BLINKWELL_HOME` overrides for tests).
 
+- `monitor` is a supervisor, not a capturer: each window runs in a hidden
+  `blinkwell __window` child process (JSON lines on stdout: `progress` then
+  `result`). libmediapipe's embedded clearcut uploader retries on a ~60 s
+  timer and has SIGSEGV'd long-lived processes — a native crash can't be
+  caught, so it must be contained: one crashed child = one dropped window,
+  and ~60 s children exit before the uploader's ~20 min crash window anyway.
+- Windows toast notifications (notify-rust → WinRT) also SIGSEGV on
+  unpackaged apps (no AppUserModelID shortcut) — observed killing monitor
+  mid-run. Toasts are disabled on Windows by default; `BLINKWELL_TOAST=1`
+  re-enables. The console reminder block is the UX on Windows; the
+  `[REMINDER]` fallback goes to stderr so `--json` stdout stays clean.
+
 - Build: `cargo build -p blinkwell --release` (inside `cli-rs/` it's just
   `cargo build --release`; the crate is a standalone package named `blinkwell`).
 - Needs `face_landmarker.task` (`--model`, `models/` beside the exe, or the

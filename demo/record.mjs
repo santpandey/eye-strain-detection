@@ -15,7 +15,7 @@ const browser = await chromium.launch();
 if (shots) {
   mkdirSync(path.join(here, "shots"), { recursive: true });
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
-  for (let s = 1; s <= 8; s++) {
+  for (let s = 1; s <= 9; s++) {
     await page.goto(`${url}?still=${s}`);
     await page.waitForTimeout(5200); // let the scene's own timers play out
     await page.screenshot({ path: path.join(here, "shots", `s${s}.png`) });
@@ -32,7 +32,7 @@ const ctx = await browser.newContext({
 });
 const page = await ctx.newPage();
 await page.goto(url);
-await page.waitForTimeout(40_300); // scenes end at 40.0 s + small tail
+await page.waitForTimeout(48_400); // scenes end at 48.0 s + small tail
 await ctx.close(); // finalises the .webm
 await browser.close();
 console.log("done → demo/out/");
