@@ -29,7 +29,11 @@ jobs:
       - name: Smoke-test `update` plumbing on this OS
         # Exercises the GitHub API call + version compare on every matrix OS.
         # GITHUB_TOKEN avoids the 60/hr unauthenticated rate limit on shared
-        # CI egress. Non-blocking: a network flake must never gate a release.
+        # CI egress. bash (Git Bash on Windows runners) keeps `||` semantics
+        # identical across OSes — Windows PowerShell 5.1 can't parse `||`.
+        # Advisory-only: a network flake must never gate a release.
+        shell: bash
+        continue-on-error: true
         env:
           BLINKWELL_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
