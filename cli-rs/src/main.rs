@@ -1,14 +1,16 @@
 //! blinkwell — on-device eye-fatigue monitor: the web app's analysis pipeline as
-//! a local process.
+//! a local process. One command: `blinkwell`.
 //!
-//! Commands:
-//!   check    live quick check (camera on for --seconds, then the result card)
-//!   monitor  periodic ~60 s camera windows every ~10 min; camera LED is ON
-//!            only during a window — between windows the device is released
-//!   replay   run a video file through the same pipeline (source 'file')
-//!   update   download the latest release and replace this binary in place
-//!   trace    replay a recorded trace JSON through the Rust pipeline and
-//!            score it against labels (parity tool for scripts/eval-trace.ts)
+//!   blinkwell            asks once, then monitors: periodic ~60 s camera
+//!                        windows every ~10 min; camera LED is ON only during
+//!                        a window — between windows the device is released
+//!   blinkwell --once     a single guided check (~90 s), then exits
+//!   blinkwell --monitor  monitor without the startup question
+//!   blinkwell replay <v> run a video file through the same pipeline ('file')
+//!   blinkwell update     download the latest release, replace this binary
+//!   blinkwell trace <f>  replay a recorded trace JSON through the pipeline
+//!                        and score it against labels (scripts/eval-trace.ts)
+//!   (`check` / `monitor` still parse as hidden aliases for old scripts.)
 
 use anyhow::{bail, Context, Result};
 use blinkwell::capture::{self, FrameOut, LandmarkerEngine};
@@ -43,6 +45,37 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
     about = "On-device eye-fatigue monitor — the web app's analysis pipeline as a local process."
 )]
 struct Cli {
+    /// One guided check, then exit. (Bare `blinkwell` asks, then monitors.)
+    #[arg(long, conflicts_with = "monitor")]
+    once: bool,
+    /// Monitor without the startup question: periodic ~60 s windows, LED off
+    /// between windows, Ctrl+C to stop.
+    #[arg(long, short = 'm')]
+    monitor: bool,
+    /// Seconds of usable footage to capture (--once).
+    #[arg(long, default_value_t = config::CAPTURE_MS / 1000.0)]
+    seconds: f64,
+    /// Camera index.
+    #[arg(long, default_value_t = 0)]
+    camera: u32,
+    /// Seconds to spend on face alignment first (--once; 0 = skip the guide).
+    #[arg(long, default_value_t = 20.0)]
+    align_timeout: f64,
+    /// Minutes between monitor window starts.
+    #[arg(long, default_value_t = config::MONITOR_INTERVAL_MS / 60_000.0)]
+    interval_min: f64,
+    /// Seconds of usable footage per monitor window.
+    #[arg(long, default_value_t = config::MONITOR_WINDOW_MS / 1000.0)]
+    window_s: f64,
+    /// Minutes between 20-20-20 break reminders (monitoring).
+    #[arg(long, default_value_t = config::MONITOR_BREAK_EVERY_MS / 60_000.0)]
+    break_every_min: f64,
+    /// Machine-readable output lines.
+    #[arg(long)]
+    json: bool,
+    /// Override face_landmarker.task path.
+    #[arg(long)]
+    model: Option<PathBuf>,
     #[command(subcommand)]
     cmd: Option<Cmd>,
 }
@@ -71,6 +104,9 @@ enum Cmd {
     /// Generate + open an HTML dashboard of your history (charts, filters).
     Report,
     /// Live quick check (camera on for --seconds).
+    /// Compatibility alias for `blinkwell --once` — hidden from --help so the
+    /// single-command surface stays unambiguous.
+    #[command(hide = true)]
     Check {
         /// Seconds of footage to capture.
         #[arg(long, default_value_t = config::CAPTURE_MS / 1000.0)]
@@ -89,6 +125,8 @@ enum Cmd {
         model: Option<PathBuf>,
     },
     /// Periodic camera windows; LED off between windows. Ctrl+C to stop.
+    /// Compatibility alias for `blinkwell --monitor` — hidden from --help.
+    #[command(hide = true)]
     Monitor {
         /// Minutes between window starts.
         #[arg(long, default_value_t = config::MONITOR_INTERVAL_MS / 60_000.0)]
@@ -444,7 +482,7 @@ fn cmd_check(
     let mut engine = LandmarkerEngine::new(&model_path)?;
     if !json {
         println!(
-            "blinkwell check — {seconds:.0} s of usable footage; it pauses if your face leaves view \
+            "blinkwell — {seconds:.0} s of usable footage; it pauses if your face leaves view \
              (camera LED on = it's really on)"
         );
     }
@@ -547,7 +585,7 @@ fn cmd_monitor(
 
     if !json {
         println!(
-            "blinkwell monitor — {window_s:.0} s camera window every {interval_min:.0} min \
+            "blinkwell — {window_s:.0} s camera window every {interval_min:.0} min \
              (break nudge every {break_every_min:.0} min). Ctrl+C to stop."
         );
         println!("  camera LED is ON only while a window runs — that's the honest signal.");
@@ -1085,7 +1123,7 @@ fn cmd_history(n: usize, days: u32, group: &str, metric: &str) -> Result<()> {
 
     let mut sessions = storage::list_sessions();
     if sessions.is_empty() {
-        println!("no saved checks yet — run `blinkwell check`");
+        println!("no saved checks yet — run `blinkwell --once`");
         return Ok(());
     }
     sessions.sort_by(|a, b| a.started_at.cmp(&b.started_at));
@@ -1206,29 +1244,57 @@ fn cmd_history(n: usize, days: u32, group: &str, metric: &str) -> Result<()> {
 }
 
 fn main() {
-    // Silence native-lib logging (absl/TFLite writes straight to fd 2).
-    blinkwell::stderr_filter::install();
     let cli = Cli::parse();
+    // Silence native-lib logging (absl/TFLite writes straight to fd 2). Install
+    // AFTER clap parses: the filter's forwarder thread races process exit, so
+    // parse errors (exit 2) would be swallowed unseen if fd 2 were already
+    // piped. Nothing native loads during parsing, so coverage is unchanged.
+    blinkwell::stderr_filter::install();
     let result = match &cli.cmd {
-        // Bare `blinkwell`: yes/no entry point — no flags to learn.
+        // Bare `blinkwell`: yes/no entry point — no flags to learn. Root flags
+        // feed the chosen action; --once / --monitor skip the question.
         None => {
-            print!("blinkwell — start monitoring now? (60 s camera every 10 min) [Y/n] ");
-            let _ = std::io::Write::flush(&mut std::io::stdout());
-            let mut s = String::new();
-            let _ = std::io::stdin().read_line(&mut s);
-            let yes = s.trim().is_empty() || s.trim().eq_ignore_ascii_case("y");
-            if yes {
+            if cli.once {
+                cmd_check(
+                    cli.seconds,
+                    cli.camera,
+                    cli.align_timeout,
+                    cli.json,
+                    &cli.model,
+                )
+            } else if cli.monitor {
                 cmd_monitor(
-                    config::MONITOR_INTERVAL_MS / 60_000.0,
-                    config::MONITOR_WINDOW_MS / 1000.0,
-                    config::MONITOR_BREAK_EVERY_MS / 60_000.0,
-                    0,
-                    false,
-                    &None,
+                    cli.interval_min,
+                    cli.window_s,
+                    cli.break_every_min,
+                    cli.camera,
+                    cli.json,
+                    &cli.model,
                 )
             } else {
-                println!("nothing started — try `blinkwell check` for a one-off, `blinkwell --help` for all commands");
-                Ok(())
+                print!(
+                    "blinkwell — start monitoring now? ({:.0} s camera every {:.0} min) [Y/n] ",
+                    cli.window_s, cli.interval_min
+                );
+                let _ = std::io::Write::flush(&mut std::io::stdout());
+                let mut s = String::new();
+                let _ = std::io::stdin().read_line(&mut s);
+                let yes = s.trim().is_empty() || s.trim().eq_ignore_ascii_case("y");
+                if yes {
+                    cmd_monitor(
+                        cli.interval_min,
+                        cli.window_s,
+                        cli.break_every_min,
+                        cli.camera,
+                        cli.json,
+                        &cli.model,
+                    )
+                } else {
+                    println!(
+                    "nothing started — `blinkwell --once` runs a single check, `blinkwell --monitor` monitors without asking"
+                );
+                    Ok(())
+                }
             }
         }
         Some(Cmd::History {

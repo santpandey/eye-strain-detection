@@ -30,10 +30,10 @@ if [ "$os" = windows ]; then
     *)     arch=x64 ;;
   esac
 elif [ "$arch" = x32 ]; then
-  echo "blinkwell: 32-bit systems aren't supported — use 'pipx install blinkwell'" >&2; exit 1
+  echo "blinkwell: 32-bit systems aren't supported — mediapipe ships no 32-bit wheels, so the pip package won't install either." >&2; exit 1
 fi
 [ "$os-$arch" = "macos-x64" ]  && { echo "blinkwell: Intel Macs — use 'pipx install blinkwell' instead." >&2; exit 1; }
-[ "$os-$arch" = "linux-arm64" ] && { echo "blinkwell: Linux ARM — use 'pipx install blinkwell' instead." >&2; exit 1; }
+[ "$os-$arch" = "linux-arm64" ] && { echo "blinkwell: no native ARM-Linux build (mediapipe ships no aarch64 C-API lib) — but 'pipx install blinkwell' works: the Python pipeline uses mediapipe's aarch64 wheel." >&2; exit 1; }
 
 if [ "$os" = windows ]; then asset="blinkwell-windows-${arch}.zip"
 else asset="blinkwell-${os}-${arch}.tar.gz"; fi
@@ -91,11 +91,99 @@ else
   install -m 0755 "$tmp/blinkwell" "$bin_dir/blinkwell"
   echo "blinkwell: installed to $bin_dir/blinkwell"
 
-  case ":$PATH:" in
-    *":$bin_dir:"*) ;;
-    *) echo "blinkwell: add '$bin_dir' to your PATH (e.g. in ~/.profile or ~/.zshrc)" ;;
-  esac
+  case ":$PATH:" in *":$bin_dir:"*) on_path=1 ;; *) on_path=0 ;; esac
+
+  if [ "$on_path" -eq 0 ]; then
+    # ── future terminals: a terminal app (iTerm, Terminal, WezTerm, VS Code,
+    # tmux…) just launches the user's shell, so coverage means that shell's
+    # startup files — and which file depends on HOW it's launched:
+    #   zsh    .zprofile (login) + .zshrc (interactive, incl. non-login)
+    #   bash   login reads ONLY the first of .bash_profile → .bash_login →
+    #          .profile that exists (don't create .bash_profile over an
+    #          existing .profile — it would shadow it); + .bashrc (non-login)
+    #   sh/dash/ksh, ssh sessions: .profile (POSIX login fallback)
+    #   fish   fish_user_paths universal var — written via fish_add_path,
+    #          survives later config.fish edits (no rc line needed)
+    #   pwsh   Microsoft.PowerShell_profile.ps1 (every interactive host)
+    #   nu     env.nu (every session);  csh/tcsh: .tcshrc/.cshrc
+    # Only the login shell's files are created; other shells are covered only
+    # if installed/configured. The guarded grep makes re-installs no-op.
+    line='export PATH="$HOME/.local/bin:$PATH"'
+    add_line() {  # $1 = rc file, $2 = snippet — skipped if dir already listed
+      if [ -f "$1" ] && grep -q '/\.local/bin' "$1" 2>/dev/null; then return; fi
+      printf '\n# blinkwell\n%s\n' "$2" >>"$1" 2>/dev/null \
+        && echo "blinkwell: PATH for new terminals saved to ~${1#$HOME}"
+    }
+    case "$(basename "${SHELL:-}")" in
+      zsh)
+        add_line "$HOME/.zprofile" "$line"; add_line "$HOME/.zshrc" "$line" ;;
+      bash)
+        if   [ -f "$HOME/.bash_profile" ]; then add_line "$HOME/.bash_profile" "$line"
+        elif [ -f "$HOME/.bash_login" ];  then add_line "$HOME/.bash_login" "$line"
+        elif [ -f "$HOME/.profile" ];     then add_line "$HOME/.profile" "$line"
+        else                                  add_line "$HOME/.bash_profile" "$line"; fi
+        add_line "$HOME/.bashrc" "$line" ;;
+      *)
+        add_line "$HOME/.profile" "$line" ;;
+    esac
+    # .profile is the universal login fallback — inert under zsh, covers
+    # sh/ksh/dash and any later-installed login shell.
+    add_line "$HOME/.profile" "$line"
+    # Other installed shells, in their own idioms.
+    command -v fish >/dev/null 2>&1 \
+      && fish -c 'fish_add_path -U "$HOME/.local/bin"' >/dev/null 2>&1 \
+      && echo "blinkwell: PATH added for fish (fish_user_paths)"
+    if command -v pwsh >/dev/null 2>&1; then
+      mkdir -p "$HOME/.config/powershell"
+      add_line "$HOME/.config/powershell/Microsoft.PowerShell_profile.ps1" \
+        '$env:PATH = "$HOME/.local/bin" + [IO.Path]::PathSeparator + $env:PATH'
+    fi
+    [ -f "$HOME/.config/nushell/env.nu" ] \
+      && add_line "$HOME/.config/nushell/env.nu" \
+        '$env.PATH = ($env.PATH | split row (char esep) | prepend ($env.HOME + "/.local/bin"))'
+    for f in "$HOME/.tcshrc" "$HOME/.cshrc"; do
+      [ -f "$f" ] || continue
+      add_line "$f" 'set path = ( "$HOME/.local/bin" $path )'
+    done
+
+    # ── THIS terminal: a script piped from curl runs in a child shell and
+    # cannot edit the parent shell's env — so instead drop a symlink into a
+    # writable dir already on PATH. Conventional user-bin dirs are preferred
+    # (keg dirs like /opt/homebrew/opt/*/bin get wiped on package upgrades);
+    # then any other writable PATH dir; system dirs are excluded even if
+    # writable.
+    linked=""
+    if command -v blinkwell >/dev/null 2>&1; then linked=skip; fi
+    for pref in /opt/homebrew/bin /usr/local/bin; do
+      [ -n "$linked" ] && break
+      case ":$PATH:" in *":$pref:"*) ;; *) continue ;; esac
+      [ "$pref" = "$bin_dir" ] && continue
+      if [ -d "$pref" ] && [ -w "$pref" ] && [ ! -e "$pref/blinkwell" ] \
+         && ln -s "$bin_dir/blinkwell" "$pref/blinkwell" 2>/dev/null; then
+        linked="$pref"; break
+      fi
+    done
+    oifs="$IFS"; IFS=':'
+    for d in $PATH; do
+      [ -n "$linked" ] && break
+      case "$d" in
+        ""|"$bin_dir"|/bin|/sbin|/usr/bin|/usr/sbin|/usr/local/bin|/usr/local/sbin|/snap/bin|/opt/local/bin) continue ;;
+      esac
+      if [ -d "$d" ] && [ -w "$d" ] && [ ! -e "$d/blinkwell" ] \
+         && ln -s "$bin_dir/blinkwell" "$d/blinkwell" 2>/dev/null; then
+        linked="$d"; break
+      fi
+    done
+    IFS="$oifs"
+    if [ "$linked" = skip ]; then
+      echo "blinkwell: 'blinkwell' already resolves in this terminal"
+    elif [ -n "$linked" ]; then
+      echo "blinkwell: ready in THIS terminal too (via $linked)"
+    else
+      echo "blinkwell: in THIS terminal, run:  export PATH=\"\$HOME/.local/bin:\$PATH\""
+    fi
+  fi
 
   # First run downloads libmediapipe (~12 MB, checksummed PyPI wheel) once.
-  echo "blinkwell: done. Try: blinkwell check    or    blinkwell monitor"
+  echo "blinkwell: done. Try: blinkwell"
 fi

@@ -10,16 +10,21 @@ This is a **faithful port** of `src/lib/analysis/*` + `src/lib/vision/features.t
 
 ## Install
 
-Requires Python ≥ 3.11 (mediapipe's safest Windows target is 3.11):
+Requires Python 3.11 or 3.12 (mediapipe ships no 3.13+ wheels). Always use
+`uv`, never bare pip:
 
 ```bat
 cd cli
-py -3.11 -m venv .venv
-.venv\Scripts\activate
-pip install -e .
+uv venv --python 3.11 .venv
+.venv\Scripts\activate        :: macOS/Linux: source .venv/bin/activate
+uv pip install -e .
 ::  or, for the exact verified pin set:
-pip install -r requirements.txt
+uv pip install -r requirements.txt
 ```
+
+Linux on ARM (aarch64) works through this path too — the dependency pin there
+is mediapipe 0.10.18, the last aarch64 wheel Google published (still predates
+the telemetry uploader added in 0.10.30).
 
 `blinkwell` is then on PATH inside the venv; `python -m blinkwell` works too.
 The face model is the repo's own `public/models/face_landmarker.task` —
@@ -28,17 +33,23 @@ nothing is downloaded.
 ## Commands
 
 ```bat
-blinkwell check --seconds 90 --camera 0     :: live quick check → result card
-blinkwell monitor --interval-min 15 --window-s 60 --break-every-min 20
+blinkwell                                   :: asks once, then monitors
+blinkwell --once --seconds 90 --camera 0    :: single guided check → result card
+blinkwell --monitor --interval-min 15 --window-s 60 --break-every-min 20
 blinkwell replay <video>                    :: run a video file through the pipeline
 blinkwell trace <trace.json> --labels <labels.json> [--tol 300]
 ```
 
-- `check` — camera on for `--seconds`, then the result card (verdict, fatigue
+The user-facing surface is one command: bare `blinkwell` asks once and then
+monitors; `--once` runs a single check; `--monitor` skips the question.
+(`blinkwell check` / `blinkwell monitor` still work — they're rewritten to
+`--once` / `--monitor` so old scripts don't break.)
+
+- `--once` — camera on for `--seconds`, then the result card (verdict, fatigue
   score, per-metric statuses, tips, disclaimer). Saved to history + baseline,
   same as a saved web-app check — **except** low-confidence checks, which
   "abstain" (printed but not saved) exactly like the app.
-- `monitor` — the core feature. Every `--interval-min` minutes the camera
+- `--monitor` — the core feature. Every `--interval-min` minutes the camera
   turns on for a `--window-s` check window and is **fully released** after it:
   `cv2.VideoCapture` opens at window start, `release()` at window end, so the
   webcam LED is off between windows. Reminder rules (`break`/`tired`/`blink`)
@@ -51,7 +62,7 @@ blinkwell trace <trace.json> --labels <labels.json> [--tol 300]
   `eval-data/diag-*.json`) through `QualityCtx` + `BlinkDetector` and prints
   events + the result; with `--labels` it prints TP/FP/FN + P/R/F1 with the
   same matching semantics as `scripts/eval-trace.ts` (default tol 300 ms).
-- `--json` on `check`/`monitor`/`replay`/`trace` prints machine-readable
+- `--json` on `--once`/`--monitor`/`replay`/`trace` prints machine-readable
   lines (one JSON object per result/window/reminder/trace).
 
 Data lives at `~/.blinkwell/`: `baseline.json` (per-metric reservoirs + median) and

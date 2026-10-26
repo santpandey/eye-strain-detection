@@ -1,12 +1,14 @@
-"""blinkwell CLI — the app's analysis pipeline as a local process.
+"""blinkwell CLI — the app's analysis pipeline as a local process. One command:
 
-Commands:
-  check    live quick check (camera on for --seconds, then the result card)
-  monitor  periodic ~60 s camera windows every ~10 min; camera LED is ON only
-           during a window — between windows cv2.VideoCapture is released
-  replay   run a video file through the same pipeline (source 'file')
-  trace    replay a recorded trace JSON through the Python pipeline and score
-           it against labels (parity tool for scripts/eval-trace.ts)
+  blinkwell            asks once, then monitors: periodic ~60 s camera windows
+                       every ~10 min; LED ON only during a window — between
+                       windows cv2.VideoCapture is released
+  blinkwell --once     a single guided check (~90 s), then exits
+  blinkwell --monitor  monitor without the startup question
+  blinkwell replay <v> run a video file through the same pipeline ('file')
+  blinkwell trace <f>  replay a recorded trace JSON through the pipeline and
+                       score it against labels (scripts/eval-trace.ts parity)
+  (`check` / `monitor` still parse as hidden aliases for old scripts.)
 """
 
 from __future__ import annotations
@@ -182,7 +184,7 @@ def cmd_check(args) -> int:
     try:
         if not args.json:
             print(
-                f"blinkwell check — camera on for {seconds:.0f} s (webcam light on = honest signal)"
+                f"blinkwell — camera on for {seconds:.0f} s (webcam light on = honest signal)"
             )
         try:
             r, _ = _run_capture(
@@ -246,7 +248,7 @@ def cmd_monitor(args) -> int:
     snoozed_until: dict = {}
     if not args.json:
         print(
-            f"blinkwell monitor — {args.window_s:g} s camera window every {args.interval_min:g} min"
+            f"blinkwell — {args.window_s:g} s camera window every {args.interval_min:g} min"
             f" (break nudge every {args.break_every_min:g} min). Ctrl+C to stop."
         )
         print("  camera LED is ON only while a window runs — that's the honest signal.")
@@ -435,27 +437,39 @@ def cmd_trace(args) -> int:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         prog="blinkwell",
-        description="On-device eye-fatigue monitor — the web app's analysis pipeline as a local process.",
+        description="On-device eye-fatigue monitor — bare `blinkwell` asks once, then monitors.",
     )
-    sub = ap.add_subparsers(dest="cmd", required=True)
+    mode = ap.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--once", action="store_true", help="run a single guided check, then exit"
+    )
+    mode.add_argument(
+        "--monitor", "-m", action="store_true", help="monitor without the startup question"
+    )
+    ap.add_argument(
+        "--seconds", type=float, default=CFG.captureMs / 1000,
+        help="seconds of usable footage to capture (--once)",
+    )
+    ap.add_argument("--camera", type=int, default=0)
+    ap.add_argument(
+        "--interval-min", type=float, default=CFG.monitorIntervalMs / 60_000,
+        help="minutes between monitor windows",
+    )
+    ap.add_argument(
+        "--window-s", type=float, default=CFG.monitorWindowMs / 1000,
+        help="seconds of usable footage per window",
+    )
+    ap.add_argument(
+        "--break-every-min", type=float, default=CFG.monitorBreakEveryMs / 60_000,
+        help="minutes between break reminders",
+    )
+    ap.add_argument("--json", action="store_true", help="machine-readable output lines")
+    ap.add_argument("--model", default=None, help="override face_landmarker.task path")
+    sub = ap.add_subparsers(dest="cmd")
 
     def common(p):
         p.add_argument("--json", action="store_true", help="machine-readable output lines")
         p.add_argument("--model", default=None, help="override face_landmarker.task path")
-
-    p = sub.add_parser("check", help="live quick check (camera on for --seconds)")
-    p.add_argument("--seconds", type=float, default=CFG.captureMs / 1000)
-    p.add_argument("--camera", type=int, default=0)
-    common(p)
-    p.set_defaults(fn=cmd_check)
-
-    p = sub.add_parser("monitor", help="periodic camera windows; LED off between windows")
-    p.add_argument("--interval-min", type=float, default=CFG.monitorIntervalMs / 60_000)
-    p.add_argument("--window-s", type=float, default=CFG.monitorWindowMs / 1000)
-    p.add_argument("--break-every-min", type=float, default=CFG.monitorBreakEveryMs / 60_000)
-    p.add_argument("--camera", type=int, default=0)
-    common(p)
-    p.set_defaults(fn=cmd_monitor)
 
     p = sub.add_parser("replay", help="run a video file through the same pipeline")
     p.add_argument("video")
@@ -482,9 +496,34 @@ def main(argv=None) -> int:
     p.set_defaults(fn=_update)
 
     _fix_console_encoding()  # before parse_args so --help prints cleanly too
+    argv = list(sys.argv[1:] if argv is None else argv)
+    # Compatibility: `blinkwell check`/`blinkwell monitor` map onto the flags
+    # — the user-facing surface is the single `blinkwell` command.
+    if argv and argv[0] in ("check", "monitor"):
+        argv[0] = "--once" if argv[0] == "check" else "--monitor"
     args = ap.parse_args(argv)
     try:
-        return args.fn(args)
+        if getattr(args, "fn", None) is not None:
+            return args.fn(args)
+        # Bare `blinkwell`: yes/no entry point — no flags to learn.
+        if args.once:
+            return cmd_check(args)
+        if args.monitor:
+            return cmd_monitor(args)
+        print(
+            f"blinkwell — start monitoring now? ({args.window_s:g} s camera every "
+            f"{args.interval_min:g} min) [Y/n] ",
+            end="",
+            flush=True,
+        )
+        s = sys.stdin.readline().strip().lower()
+        if s in ("", "y", "yes"):
+            return cmd_monitor(args)
+        print(
+            "nothing started — `blinkwell --once` runs a single check, "
+            "`blinkwell --monitor` monitors without asking"
+        )
+        return 0
     except KeyboardInterrupt:
         print("\ninterrupted", file=sys.stderr)
         return 130

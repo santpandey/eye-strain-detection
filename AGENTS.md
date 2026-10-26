@@ -54,22 +54,30 @@ CLI-owned (deleted from config.ts). Process-side plumbing is `capture.py`
 (cv2 + mediapipe), `storage.py` (`~/.blinkwell/baseline.json` + `history.jsonl`),
 `scoreSession.py`, `cli.py`.
 
-- Setup: `cd cli && py -3.11 -m venv .venv && .venv/Scripts/activate && pip install -r requirements.txt`
-  (or `pip install -e .`; mediapipe is hard-pinned to 0.10.21 — later builds
-  ship a native telemetry uploader that attempts network calls).
-- Commands: `blinkwell check [--seconds 90] [--camera 0]`, `blinkwell monitor
-  [--interval-min 15] [--window-s 60] [--break-every-min 20]` (camera LED on
-  only during windows — VideoCapture released between them), `blinkwell replay
-  <video>` (source 'file', distance n/a), `blinkwell trace <trace.json>
-  [--labels <labels.json>] [--tol 300]` (parity with `npm run eval:trace`).
-  `--json` gives machine-readable lines.
-- Parity check: `cli/.venv/Scripts/python.exe -m blinkwell trace
+- Setup (always `uv`, never bare pip): `cd cli && uv venv --python 3.11 .venv &&
+  uv pip install -p .venv/bin/python -r requirements.txt` (on Windows the venv
+  interpreter is `.venv\Scripts\python.exe`; `uv pip install -p .venv -e .` for
+  the editable install). Python 3.11/3.12 only — mediapipe is hard-pinned to
+  0.10.21 (linux-aarch64: 0.10.18, the last aarch64 wheel; both predate the
+  native telemetry uploader added in 0.10.30), which has no cp313+ wheels, so
+  `requires-python` is bounded `<3.13`.
+- Commands: one user-facing command — bare `blinkwell` asks once then
+  monitors; `blinkwell --once [--seconds 90] [--camera 0]` is a single check;
+  `blinkwell --monitor [--interval-min 15] [--window-s 60] [--break-every-min
+  20]` skips the question (camera LED on only during windows — VideoCapture
+  released between them); `blinkwell replay <video>` (source 'file', distance
+  n/a); `blinkwell trace <trace.json> [--labels <labels.json>] [--tol 300]`
+  (parity with `npm run eval:trace`). `check`/`monitor` remain as hidden
+  compat aliases rewritten to the flags. `--json` gives machine-readable
+  lines.
+- Parity check: `cli/.venv/bin/python -m blinkwell trace
   tests/traces/synthetic.trace.json --labels tests/traces/synthetic.labels.json`
   must reproduce `npm run eval:trace` event-for-event (verified F1-identical on
   synthetic + two eval-data diag traces).
 - **Keep `cli/blinkwell/config.py` in sync with `src/lib/analysis/config.ts`** —
   every CFG constant was copied verbatim.
-- Tests: `cli/.venv/Scripts/python.exe -m pytest cli/tests` (pytest; mirrors
+- Tests: `cli/.venv/bin/python -m pytest tests` from `cli/` (Windows:
+  `cli\.venv\Scripts\python.exe -m pytest tests`; pytest; mirrors
   tests/blink.test.ts + session.test.ts).
 
 ## Delegate selection (engine.ts)
@@ -137,11 +145,13 @@ tests/                           # vitest unit tests (synthetic FrameFeatures @3
 Windows-first Rust port of the whole pipeline for background monitoring:
 camera → MediaPipe FaceLandmarker (`mediapipe` crate, CPU/XNNPACK) →
 `FrameFeatures` → the ported `QualityCtx`/`BlinkDetector`/`QuickCheckAggregator`
-→ `QuickCheckResult`. Commands: `check` (live quick check), `monitor`
-(periodic ~60 s windows; the camera device is created only during a window so
-the LED is honestly off between windows), `replay` (video file via an ffmpeg
-subprocess — not bundled), `update` (self-update from the latest GitHub
-Release via curl; renames the running exe aside on Windows, Python-installed
+→ `QuickCheckResult`. One user-facing command: bare `blinkwell` asks once then
+monitors; `--once` runs a single guided check, `--monitor`/`-m` monitors
+without asking (periodic ~60 s windows; the camera device is created only
+during a window so the LED is honestly off between windows; `check`/`monitor`
+still parse as hidden compat aliases). Other subcommands: `replay` (video file
+via an ffmpeg subprocess — not bundled), `update` (self-update from the
+latest GitHub Release via curl; renames the running exe aside on Windows, Python-installed
 copies defer to pipx/uv instead), `trace` (offline parity harness for
 `scripts/eval-trace.ts`). Same privacy rule as the app: frames are processed
 in memory only; only summary metrics persist under `~/.blinkwell`
@@ -180,7 +190,9 @@ in memory only; only summary metrics persist under `~/.blinkwell`
 - `.github/workflows/release.yml` — on tag `v*`: matrix builds
   linux-x64 / macos-arm64 / windows-x64 / windows-arm64 → GitHub Release
   assets. No libmediapipe bundling needed (runtime download). Intel mac +
-  linux-arm64 have no PyPI wheel → those users use the pip package.
+  linux-arm64 have no native build (mediapipe ships no aarch64 C-API lib for
+  the crate to dlopen) → those users get the Python pipeline via pipx/uvx
+  (mediapipe pins to 0.10.18 there — the last aarch64 wheel, pre-uploader).
 - `.github/workflows/publish-pypi.yml` — on tag `v*`: `uv build` + `uv
   publish` (PyPI trusted publishing; configure the publisher on PyPI once,
   or set `PYPI_API_TOKEN`). Gives `uvx blinkwell` / `pipx install blinkwell`.
@@ -215,7 +227,7 @@ version bump MUST land before the tag. In order:
    version — commit the lockfile too.
 3. Update the hardcoded version chip in `site/index.html` (nav, `vX.Y.Z`).
 4. Verify green: `cargo fmt --check`, `cargo clippy --release`,
-   `cargo test --release`, `cd cli && .venv/Scripts/python -m pytest tests/`,
+   `cargo test --release`, `cd cli && .venv/bin/python -m pytest tests/`,
    `npm test` if `src/` changed.
 5. `git push` — moves `main` (Netlify redeploys `site/` on this push).
 6. `git tag vX.Y.Z && git push origin vX.Y.Z` — pushes the tag ref →

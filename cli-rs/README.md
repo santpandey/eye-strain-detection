@@ -6,11 +6,15 @@ binary that can watch you in the background without a browser or a hidden-tab
 throttle.
 
 ```
-blinkwell check     live quick check (camera on ~90 s, then the result card)
-blinkwell monitor   periodic ~60 s camera windows every ~10 min, reminders
-blinkwell replay    run a video file through the same pipeline
-blinkwell trace     replay a recorded trace JSON, score it against labels
+blinkwell            asks once, then monitors (one command — that's it)
+blinkwell --once     live quick check (camera on ~90 s, then the result card)
+blinkwell --monitor  periodic ~60 s camera windows every ~10 min, reminders
+blinkwell replay     run a video file through the same pipeline
+blinkwell trace      replay a recorded trace JSON, score it against labels
 ```
+
+(`blinkwell check` / `blinkwell monitor` from older docs still parse — they
+are hidden aliases for `--once` / `--monitor`.)
 
 ## Privacy
 
@@ -59,13 +63,13 @@ time:
    the exe. Everything still runs locally.
 
 ```sh
-cargo run --release -- check
-blinkwell.exe monitor --interval-min 15 --window-s 60
+cargo run --release -- --once
+blinkwell.exe --monitor --interval-min 15 --window-s 60
 ```
 
 ## Commands
 
-### `blinkwell check [--seconds 90] [--camera 0] [--json] [--model <path>]`
+### `blinkwell [--once] [--seconds 90] [--camera 0] [--align-timeout 20] [--json] [--model <path>]`
 
 Opens the camera for `--seconds`, runs every frame through MediaPipe
 FaceLandmarker (VIDEO mode, CPU delegate — the app's own fallback) →
@@ -79,12 +83,12 @@ contributed to it — the same order the app uses. `confidence: low` results
 are not saved (the app "abstains" the same way). `--json` prints one
 machine-readable line instead of the card.
 
-### `blinkwell monitor [--interval-min 15] [--window-s 60] [--break-every-min 20] [--camera 0]`
+### `blinkwell --monitor [--interval-min 15] [--window-s 60] [--break-every-min 20] [--camera 0]`
 
 Long-running supervisor. Every `--interval-min` minutes it captures a
 `--window-s` camera window — creating the camera **only for the window** and
 dropping it right after, so the LED is on only while measuring. Each window
-is scored/learned/saved like `check`. Between windows it prints a countdown
+is scored/learned/saved like `--once`. Between windows it prints a countdown
 line roughly every 30 s.
 
 Reminders (from `src/lib/analysis` monitor rules):
@@ -146,7 +150,8 @@ src/
   storage.rs     ~/.blinkwell baseline.json + history.jsonl
   notify.rs      toast via notify-rust, [REMINDER] console fallback
   capture.rs     camera (nokhwa/MSMF) + ffmpeg pipe + MediaPipe engine
-  main.rs        clap CLI: check / monitor / replay / trace
+  main.rs        clap CLI: --once / --monitor / replay / trace
+                 (check / monitor parse as hidden compat aliases)
 tests/blink.rs   port of tests/blink.test.ts (27 cases)
 ```
 
@@ -162,7 +167,7 @@ cargo fmt
 
 - The web app mirrors the camera preview with CSS; landmark coordinates are
   never mirrored — the CLI does the same (there is no preview at all).
-- `check`/`monitor` request 640×480 @30 fps and fall back to the camera's
+- `--once`/`--monitor` request 640×480 @30 fps and fall back to the camera's
   best available mode (webcam-dependent), matching the app's request.
 - The fatigue score needs ≥5 blink events to be non-null, and the personal
   baseline needs ≥3 saved checks (`baselineReady`).

@@ -73,4 +73,6 @@ if ($userPath -notlike "*$dest*") {
 }
 
 # First run downloads libmediapipe (~12 MB, checksummed PyPI wheel) once.
-Write-Host "blinkwell: installed - open a NEW terminal window, then type: blinkwell"
+# iex runs this in the caller's session and $env:Path was updated above, so
+# the command works in THIS window already — no new terminal needed.
+Write-Host "blinkwell: installed - type: blinkwell"

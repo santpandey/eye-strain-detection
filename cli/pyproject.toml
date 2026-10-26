@@ -4,19 +4,24 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "blinkwell"
-version = "0.1.6"
+version = "0.1.7"
 description = "On-device eye-fatigue monitor — periodic camera windows, baseline, breaks"
 readme = "README.md"
-requires-python = ">=3.11"
+# mediapipe==0.10.21 wheels exist for cp310–cp312 only — without the upper
+# bound, pip/uvx on Python 3.13+ fails with a cryptic "no matching wheel".
+requires-python = ">=3.11,<3.13"
 license = "MIT"
 dependencies = [
   # mediapipe 0.10.30+ bundles a native Clearcut telemetry uploader that
-  # attempts network calls; 0.10.21 predates it — pinned hard on purpose.
-  "mediapipe==0.10.21",
+  # attempts network calls; the pins below all predate it — on purpose.
+  # Google dropped linux-aarch64 wheels after 0.10.18, so ARM Linux gets the
+  # last available build there (still uploader-free; same Python Tasks API).
+  "mediapipe==0.10.18; sys_platform == 'linux' and platform_machine == 'aarch64'",
+  "mediapipe==0.10.21; sys_platform != 'linux' or platform_machine != 'aarch64'",
   # mediapipe pulls opencv-contrib-python (superset providing cv2);
   # installing opencv-python too just fights it for the cv2 package dir.
   "opencv-contrib-python>=4.9,<5",
-  "numpy>=1.26,<2",  # mediapipe 0.10.21 requires numpy<2
+  "numpy>=1.26,<2",  # mediapipe 0.10.x requires numpy<2
 ]
 
 [project.optional-dependencies]
