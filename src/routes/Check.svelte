@@ -41,8 +41,28 @@
   let errorMsg = $state('');
   let guidance = $state('Looking for your face…');
   let aligned = $state(false);
+  /** 0–1 progress through the "hold still" window in the align phase. */
+  let holdFrac = $state(0);
   let countdown = $state(3);
   let paused = $state(false);
+  /** Dock the camera view to the corner while capturing. */
+  let minimized = $state(false);
+  const AUTO_MINI_KEY = 'blinkwell.autoMinimize';
+  let autoMini = $state(readAutoMini());
+  function readAutoMini(): boolean {
+    try {
+      return localStorage.getItem(AUTO_MINI_KEY) !== '0';
+    } catch {
+      return true;
+    }
+  }
+  $effect(() => {
+    try {
+      localStorage.setItem(AUTO_MINI_KEY, autoMini ? '1' : '0');
+    } catch {
+      /* storage unavailable */
+    }
+  });
   let qualityMs = $state(0);
   let blinkCount = $state(0);
   let result = $state<QuickCheckResult | null>(null);
@@ -104,9 +124,11 @@
       const now = f.t;
       if (aligned) {
         if (alignedSince === null) alignedSince = now;
-        else if (now - alignedSince >= ALIGN_HOLD_MS) startCountdown();
+        holdFrac = Math.min(1, (now - alignedSince) / ALIGN_HOLD_MS);
+        if (now - alignedSince >= ALIGN_HOLD_MS) startCountdown();
       } else {
         alignedSince = null;
+        holdFrac = 0;
       }
     } else if (phase === 'capture' && agg) {
       if (captureStartT === null) captureStartT = f.t;
@@ -202,6 +224,7 @@
     blinkCount = 0;
     paused = false;
     scoreView = null;
+    minimized = autoMini;
     phase = 'capture';
   }
 
@@ -332,7 +355,7 @@
   ];
   let tipIdx = $state(0);
   $effect(() => {
-    if (fs.phase !== 'analyzing') return;
+    if (fs.phase !== 'analyzing' && !(phase === 'capture' && minimized)) return;
     const t = window.setInterval(() => (tipIdx = (tipIdx + 1) % EDU_TIPS.length), 9000);
     return () => window.clearInterval(t);
   });
@@ -485,6 +508,10 @@
       <button class="btn btn-primary" onclick={start} disabled={consent === 'checking'}>
         Allow camera
       </button>
+      <label class="mini-toggle">
+        <input type="checkbox" bind:checked={autoMini} />
+        Dock the camera to the corner while measuring, so you can keep working
+      </label>
       <button class="btn-link" onclick={pickFile}>Analyze a video file instead</button>
     </section>
   {/if}
@@ -492,6 +519,7 @@
   <section class="stack">
     <div
       class="video-card card"
+      class:mini={phase === 'capture' && minimized}
       style:aspect-ratio="{videoW} / {videoH}"
       data-backend={backendKind}
       data-source="camera"
@@ -508,40 +536,100 @@
           <h1>Preparing eye model…</h1>
           <p>Loading the on-device face model.</p>
         </div>
-      {:else if videoEl}
-        <AlignmentOverlay features={latest} {aligned} frameW={videoW} frameH={videoH} />
+      {:else if videoEl && phase !== 'capture'}
+        <AlignmentOverlay features={latest} {aligned} frameW={videoW} frameH={videoH} {holdFrac} />
+      {/if}
+      {#if phase === 'align'}
+        <p class="guidance" aria-live="polite">{guidance}</p>
       {/if}
       {#if phase === 'countdown'}
         <div class="countdown" aria-live="assertive">{countdown}</div>
       {/if}
       {#if phase === 'capture'}
-        <div class="capture-hud">
-          <ProgressRing {progress} size={88} stroke={8} />
-          <div class="hud-body">
-            <div class="hud-line"><strong>{remaining}s</strong> remaining</div>
-            <div class="hud-line muted" data-testid="hud-usable">
-              Usable footage: {usableS}s of {targetS}s
-            </div>
-            <div class="hud-line muted" data-testid="hud-blinks">{blinkLabel}</div>
-            <div class="hud-paused-region" aria-live="polite">
-              {#if paused}
-                <div class="hud-paused" data-testid="hud-paused">
-                  <div class="hud-paused-reason">Paused — {pausedReason}</div>
-                  <div class="hud-paused-note">Blinks aren't counted until your face is clearly visible.</div>
-                </div>
-              {/if}
+        {#if minimized}
+          <div class="mp-topbtns">
+            <button
+              class="mp-btn"
+              onclick={() => (minimized = false)}
+              aria-label="Show camera view"
+              title="Show camera view">⤢</button
+            >
+            <button class="mp-btn" onclick={cancel} aria-label="Stop the check" title="Stop"
+              >✕</button
+            >
+          </div>
+          <div class="mp-bar" role="progressbar" aria-valuenow={Math.round(progress * 100)}>
+            <div class="mp-bar-fill" style:width="{progress * 100}%"></div>
+          </div>
+          {#if paused}
+            <div class="mp-badge" data-testid="hud-paused">Paused — {pausedReason}</div>
+          {/if}
+        {:else}
+          <div class="capture-hud">
+            <ProgressRing {progress} size={88} stroke={8} />
+            <div class="hud-body">
+              <div class="hud-line"><strong>{remaining}s</strong> remaining</div>
+              <div class="hud-line muted" data-testid="hud-usable">
+                Usable footage: {usableS}s of {targetS}s
+              </div>
+              <div class="hud-line muted" data-testid="hud-blinks">{blinkLabel}</div>
+              <div class="hud-paused-region" aria-live="polite">
+                {#if paused}
+                  <div class="hud-paused" data-testid="hud-paused">
+                    <div class="hud-paused-reason">Paused — {pausedReason}</div>
+                    <div class="hud-paused-note">Blinks aren't counted until your face is clearly visible.</div>
+                  </div>
+                {/if}
+              </div>
             </div>
           </div>
-        </div>
+        {/if}
       {/if}
     </div>
-    {#if phase === 'align'}
-      <p class="guidance" aria-live="polite">{guidance}</p>
+    {#if phase === 'capture' && minimized}
+      <div class="card capture-card stack">
+        <h1>Measuring your eyes</h1>
+        <p class="muted">
+          The camera is docked in the corner — keep working as normal. Blinks only
+          count while your face is clearly visible.
+        </p>
+        <div class="caprow">
+          <ProgressRing {progress} size={64} stroke={7} />
+          <div>
+            <div><strong>{remaining}s</strong> remaining</div>
+            <div class="muted small" data-testid="hud-usable">
+              Usable footage: {usableS}s of {targetS}s
+            </div>
+            <div class="muted small" data-testid="hud-blinks">{blinkLabel}</div>
+          </div>
+        </div>
+        {#if paused}
+          <div class="paused-note">
+            <strong>Paused — {pausedReason}</strong>
+            <span>Blinks aren't counted until your face is clearly visible.</span>
+          </div>
+        {/if}
+        <div class="tip-block">
+          <h2>While you wait</h2>
+          <p aria-live="polite">{EDU_TIPS[tipIdx]}</p>
+        </div>
+        <div class="row">
+          <button class="btn btn-secondary" onclick={cancel}>Stop check</button>
+          <button class="btn btn-secondary" onclick={() => (minimized = false)}>Show camera</button>
+          {#if delegate}<span class="muted small">Engine: {delegate}</span>{/if}
+        </div>
+      </div>
+    {:else}
+      <div class="row">
+        <button class="btn btn-secondary" onclick={cancel}>Cancel</button>
+        {#if phase === 'capture'}
+          <button class="btn btn-secondary" onclick={() => (minimized = true)}>
+            Minimize camera
+          </button>
+        {/if}
+        {#if delegate}<span class="muted small">Engine: {delegate}</span>{/if}
+      </div>
     {/if}
-    <div class="row">
-      <button class="btn btn-secondary" onclick={cancel}>Cancel</button>
-      {#if delegate}<span class="muted small">Engine: {delegate}</span>{/if}
-    </div>
   </section>
 {:else if phase === 'results' && result}
   {@render resultsCard(result, false)}
@@ -755,6 +843,100 @@
     padding: 0;
     background: #000;
   }
+  /* Docked capture view: same element restyled, so srcObject and the rVFC
+     frame loop keep running untouched. */
+  .video-card.mini {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    width: 220px;
+    z-index: 40;
+    box-shadow: var(--shadow);
+    border-radius: 12px;
+  }
+  @media (max-width: 719px) {
+    .video-card.mini {
+      right: 10px;
+      bottom: 76px;
+      width: 170px;
+    }
+  }
+  .mp-topbtns {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    left: 6px;
+    display: flex;
+    justify-content: space-between;
+    pointer-events: none;
+  }
+  .mp-topbtns .mp-btn {
+    pointer-events: auto;
+  }
+  .mp-btn {
+    appearance: none;
+    border: none;
+    background: rgb(0 0 0 / 0.55);
+    color: #fff;
+    width: 28px;
+    height: 28px;
+    min-height: 28px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    line-height: 1;
+    cursor: pointer;
+    display: inline-grid;
+    place-items: center;
+  }
+  .mp-btn:hover {
+    background: rgb(0 0 0 / 0.75);
+  }
+  .mp-bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 5px;
+    background: rgb(0 0 0 / 0.35);
+  }
+  .mp-bar-fill {
+    height: 100%;
+    background: var(--primary);
+    transition: width 200ms linear;
+  }
+  .mp-badge {
+    position: absolute;
+    left: 6px;
+    bottom: 11px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #fff;
+    background: rgb(0 0 0 / 0.55);
+    padding: 2px 8px;
+    border-radius: 999px;
+  }
+  .caprow {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+  }
+  .capture-card {
+    max-width: 560px;
+    margin: 48px auto 0;
+  }
+  .mini-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .mini-toggle input {
+    accent-color: var(--primary);
+    width: 16px;
+    height: 16px;
+  }
   .loading-overlay {
     position: absolute;
     inset: 0;
@@ -828,10 +1010,20 @@
     color: rgb(255 255 255 / 0.9);
   }
   .guidance {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    margin: 0;
+    padding: 8px 16px;
+    max-width: calc(100% - 24px);
     text-align: center;
-    font-size: 1.15rem;
+    font-size: 1.05rem;
     font-weight: 600;
-    min-height: 1.6em;
+    color: #fff;
+    background: rgb(0 0 0 / 0.55);
+    border-radius: 999px;
+    text-wrap: balance;
   }
   .analyzing-card {
     max-width: 560px;
