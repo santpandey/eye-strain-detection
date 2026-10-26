@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "blinkwell"
-version = "0.1.8"
+version = "0.1.9"
 description = "On-device eye-fatigue monitor — periodic camera windows, baseline, breaks"
 readme = "README.md"
 # mediapipe==0.10.21 wheels exist for cp310–cp312 only — without the upper
