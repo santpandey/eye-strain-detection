@@ -257,7 +257,7 @@ impl QuickCheckAggregator {
         self.quality.last.as_ref()
     }
 
-    pub fn result(&mut self, source: Source) -> QuickCheckResult {
+    pub fn result(&mut self, source: Source, target_ms: f64) -> QuickCheckResult {
         self.detector.finish();
         let d = &self.detector;
         let events = &d.events;
@@ -337,6 +337,7 @@ impl QuickCheckAggregator {
             backlit_pct,
             discard_pct: d.discard_pct(),
             candidate_count: d.candidate_count(),
+            target_ms,
         });
 
         QuickCheckResult {
@@ -386,6 +387,9 @@ pub struct ConfidenceInput {
     pub backlit_pct: f64,
     pub discard_pct: f64,
     pub candidate_count: usize,
+    /// Planned usable-time target for this capture (--seconds, --window-s).
+    /// 0 = unknown/fixed-length input (replay, trace) — absolute floors stand.
+    pub target_ms: f64,
 }
 
 pub struct ConfidenceOut {
@@ -394,13 +398,25 @@ pub struct ConfidenceOut {
 }
 
 pub fn assess_confidence(i: &ConfidenceInput) -> ConfidenceOut {
+    // The usable-footage floors scale to the planned capture length: a 60 s
+    // monitor window can never reach the absolute 80 s floor, so the bar
+    // becomes "as much usable time as this window could yield".
+    let scale = |floor: f64| {
+        if i.target_ms > 0.0 {
+            floor.min(i.target_ms)
+        } else {
+            floor
+        }
+    };
+    let high_ms = scale(config::CONF_HIGH_QUALITY_MS);
+    let med_ms = scale(config::CONF_MED_QUALITY_MS);
     let mut reasons: Vec<ConfidenceReason> = Vec::new();
-    if i.quality_ms < config::CONF_HIGH_QUALITY_MS {
+    if i.quality_ms < high_ms {
         reasons.push(ConfidenceReason {
             text: format!(
                 "Only {:.0} s of usable footage ({:.0} s+ recommended)",
                 (i.quality_ms / 1000.0).round(),
-                (config::CONF_HIGH_QUALITY_MS / 1000.0).round()
+                (high_ms / 1000.0).round()
             ),
             fix: "Keep your face in frame and well lit for the whole check.".to_string(),
         });
@@ -468,7 +484,7 @@ pub fn assess_confidence(i: &ConfidenceInput) -> ConfidenceOut {
     } else if discard_abstain {
         Confidence::Low
     } else {
-        let medium = i.quality_ms >= config::CONF_MED_QUALITY_MS
+        let medium = i.quality_ms >= med_ms
             && i.quality_pct >= config::CONF_MED_QUALITY_PCT
             && i.fps_mean >= config::CONF_MED_FPS;
         if medium {
@@ -502,5 +518,57 @@ fn mean(xs: &[f64]) -> f64 {
         0.0
     } else {
         xs.iter().sum::<f64>() / xs.len() as f64
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn input(quality_ms: f64, target_ms: f64) -> ConfidenceInput {
+        ConfidenceInput {
+            quality_ms,
+            quality_pct: 95.0,
+            fps_mean: 29.0,
+            glare_pct: 0.0,
+            backlit_pct: 0.0,
+            discard_pct: 0.0,
+            candidate_count: 0,
+            target_ms,
+        }
+    }
+
+    #[test]
+    fn floor_scales_to_shorter_planned_target() {
+        // The 60 s monitor window case: the absolute 80 s floor was unreachable.
+        let r = assess_confidence(&input(62_000.0, 60_000.0));
+        assert!(matches!(r.confidence, Confidence::High));
+        assert!(r.reasons.is_empty());
+    }
+
+    #[test]
+    fn scaled_floor_is_cited_in_reason() {
+        let r = assess_confidence(&input(58_000.0, 60_000.0));
+        assert!(matches!(r.confidence, Confidence::Low));
+        assert!(r
+            .reasons
+            .iter()
+            .any(|x| x.text.contains("60 s+ recommended")));
+    }
+
+    #[test]
+    fn absolute_floors_when_no_target() {
+        let r = assess_confidence(&input(62_000.0, 0.0));
+        assert!(matches!(r.confidence, Confidence::Medium));
+        assert!(r
+            .reasons
+            .iter()
+            .any(|x| x.text.contains("80 s+ recommended")));
+    }
+
+    #[test]
+    fn medium_floor_scales_under_60s_target() {
+        let r = assess_confidence(&input(45_000.0, 45_000.0));
+        assert!(matches!(r.confidence, Confidence::High));
     }
 }

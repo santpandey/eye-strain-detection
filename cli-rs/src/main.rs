@@ -366,9 +366,13 @@ fn print_result_card(r: &QuickCheckResult, score_out: Option<&FatigueScoreOut>, 
 // --------------------------------------------------------- capture plumbing --
 
 /// Feed a frame source into a fresh aggregator; progress lines unless --json.
+/// `target_ms` is the planned usable-time target for confidence floors
+/// (0 = fixed-length input — replay — where the absolute floors stand).
 fn run_capture<F>(
     json_mode: bool,
     status_prefix: &str,
+    source: Source,
+    target_ms: f64,
     mut run_source: F,
 ) -> Result<(QuickCheckResult, QuickCheckAggregator)>
 where
@@ -400,7 +404,7 @@ where
     if !json_mode {
         println!();
     }
-    let r = agg.result(Source::Camera);
+    let r = agg.result(source, target_ms);
     Ok((r, agg))
 }
 
@@ -487,17 +491,23 @@ fn cmd_check(
         );
     }
     let cancel = cancel_flag();
-    let (r, _agg) = run_capture(json, "check  ", |on_frame| {
-        capture::run_camera_aligned(
-            &mut engine,
-            camera,
-            seconds * 1000.0,
-            align_timeout * 1000.0,
-            !json,
-            Some(cancel.clone()),
-            on_frame,
-        )
-    })?;
+    let (r, _agg) = run_capture(
+        json,
+        "check  ",
+        Source::Camera,
+        seconds * 1000.0,
+        |on_frame| {
+            capture::run_camera_aligned(
+                &mut engine,
+                camera,
+                seconds * 1000.0,
+                align_timeout * 1000.0,
+                !json,
+                Some(cancel.clone()),
+                on_frame,
+            )
+        },
+    )?;
     drop(engine);
     finish_result(r, json);
     Ok(())
@@ -524,7 +534,7 @@ fn cmd_replay(
         );
     }
     let cancel = cancel_flag();
-    let (r, _agg) = run_capture(json, "replay ", |on_frame| {
+    let (r, _agg) = run_capture(json, "replay ", Source::File, 0.0, |on_frame| {
         capture::run_video_file(&mut engine, video, &ffmpeg, Some(cancel.clone()), on_frame)
     })?;
     drop(engine);
@@ -858,8 +868,8 @@ fn cmd_window(window_s: f64, camera: u32, model: &Option<PathBuf>) -> Result<()>
     let mut engine = LandmarkerEngine::new(&model_path)?;
     let cancel = cancel_flag();
     let mut agg = QuickCheckAggregator::new();
-    // Usable-time target: window_s + 2 s slack so --window-s 60 clears the
-    // 60 s medium-confidence floor (camera warmup isn't footage).
+    // Usable-time target: window_s + 2 s slack — camera warmup isn't footage,
+    // and the usable clock only ticks on quality-accepted frames.
     let usable_target = window_s * 1000.0 + 2_000.0;
     let mut last_status = -f64::INFINITY;
     capture::run_camera_aligned(
@@ -881,7 +891,7 @@ fn cmd_window(window_s: f64, camera: u32, model: &Option<PathBuf>) -> Result<()>
             agg.push(&out.features)
         },
     )?;
-    let r = agg.result(Source::Monitor);
+    let r = agg.result(Source::Monitor, window_s * 1000.0);
     println!("{}", serde_json::json!({"type":"result","result":r}));
     Ok(())
 }
@@ -948,7 +958,7 @@ fn cmd_trace(traces: &[PathBuf], labels: &Option<PathBuf>, tol: f64, json: bool)
         for f in &frames {
             agg.push(f);
         }
-        let r = agg.result(Source::File);
+        let r = agg.result(Source::File, 0.0);
         let det = &agg.detector;
         let name = trace_path
             .file_name()

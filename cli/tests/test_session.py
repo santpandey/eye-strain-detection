@@ -64,6 +64,26 @@ class TestAssessConfidence:
         r = assess_confidence(dict(GOOD, discardPct=55, candidateCount=3))
         assert r["confidence"] != "low"
 
+    def test_scales_floor_to_planned_target(self):
+        # The 60 s monitor window case: the absolute 80 s floor was unreachable.
+        r = assess_confidence(dict(GOOD, qualityMs=62_000, targetMs=60_000))
+        assert r["confidence"] == "high"
+        assert r["reasons"] == []
+
+    def test_scaled_floor_cited_in_reason(self):
+        r = assess_confidence(dict(GOOD, qualityMs=58_000, targetMs=60_000))
+        assert r["confidence"] == "low"
+        assert any("60 s+ recommended" in x["text"] for x in r["reasons"])
+
+    def test_absolute_floors_when_no_target(self):
+        r = assess_confidence(dict(GOOD, qualityMs=62_000))
+        assert r["confidence"] == "medium"
+        assert any("80 s+ recommended" in x["text"] for x in r["reasons"])
+
+    def test_medium_reachable_under_60s_target(self):
+        r = assess_confidence(dict(GOOD, qualityMs=45_000, targetMs=45_000))
+        assert r["confidence"] == "high"
+
 
 CORE = {
     "blinkRate": 14,

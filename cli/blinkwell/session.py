@@ -112,7 +112,7 @@ class QuickCheckAggregator:
         s = self.quality.fps_samples
         return sum(s) / len(s) if s else 0.0
 
-    def result(self, source: str = "camera") -> dict:
+    def result(self, source: str = "camera", target_ms: float = 0.0) -> dict:
         d = self.detector
         d.finish()
         events = d.events
@@ -169,6 +169,7 @@ class QuickCheckAggregator:
                 "backlitPct": backlit_pct,
                 "discardPct": d.discard_pct,
                 "candidateCount": d.candidate_count,
+                "targetMs": target_ms,
             }
         )
         return {
@@ -193,11 +194,17 @@ def _js_round(x: float) -> int:
 
 
 def assess_confidence(i: dict) -> dict:
+    # The usable-footage floors scale to the planned capture length: a 60 s
+    # monitor window can never reach the absolute 80 s floor, so the bar
+    # becomes "as much usable time as this window could yield".
+    target = i.get("targetMs", 0.0)
+    high_ms = min(CFG.confHighQualityMs, target) if target > 0 else CFG.confHighQualityMs
+    med_ms = min(CFG.confMedQualityMs, target) if target > 0 else CFG.confMedQualityMs
     reasons: list = []
-    if i["qualityMs"] < CFG.confHighQualityMs:
+    if i["qualityMs"] < high_ms:
         reasons.append(
             {
-                "text": f"Only {_js_round(i['qualityMs'] / 1000)} s of usable footage ({_js_round(CFG.confHighQualityMs / 1000)} s+ recommended)",
+                "text": f"Only {_js_round(i['qualityMs'] / 1000)} s of usable footage ({_js_round(high_ms / 1000)} s+ recommended)",
                 "fix": "Keep your face in frame and well lit for the whole check.",
             }
         )
@@ -253,7 +260,7 @@ def assess_confidence(i: dict) -> dict:
         return {"confidence": "low", "reasons": reasons}
 
     medium = (
-        i["qualityMs"] >= CFG.confMedQualityMs
+        i["qualityMs"] >= med_ms
         and i["qualityPct"] >= CFG.confMedQualityPct
         and i["fpsMean"] >= CFG.confMedFps
     )

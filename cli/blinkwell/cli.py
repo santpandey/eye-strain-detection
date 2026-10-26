@@ -127,9 +127,14 @@ def print_result_card(r: dict, score_out: dict | None = None, saved: bool = True
     print("─" * 52)
 
 
-def _run_capture(engine, source_iter, json_mode: bool, source: str, status_prefix: str = ""):
+def _run_capture(
+    engine, source_iter, json_mode: bool, source: str,
+    status_prefix: str = "", target_ms: float = 0.0,
+):
     """Feed a FrameFeatures iterator into a fresh aggregator; progress lines
-    unless --json. Returns (result, aggregator)."""
+    unless --json. `target_ms` is the planned usable-time target for confidence
+    floors (0 = fixed-length input — replay — where the absolute floors stand).
+    Returns (result, aggregator)."""
     agg = QuickCheckAggregator()
     last_status = [0.0]
 
@@ -150,7 +155,7 @@ def _run_capture(engine, source_iter, json_mode: bool, source: str, status_prefi
         agg.push(f)
     if not json_mode:
         print()
-    r = agg.result(source)
+    r = agg.result(source, target_ms)
     return r, agg
 
 
@@ -195,6 +200,7 @@ def cmd_check(args) -> int:
                 args.json,
                 "camera",
                 status_prefix="check  ",
+                target_ms=seconds * 1000,
             )
         except RuntimeError as e:
             print(f"camera error: {e}", file=sys.stderr)
@@ -295,11 +301,10 @@ def cmd_monitor(args) -> int:
                         f"[window {win_n} @ {time.strftime('%H:%M:%S')}] capturing {args.window_s:.0f}s…"
                     )
                 agg = QuickCheckAggregator()
-                # Wall-clock windows can't clear the confidence floor: a 60 s
-                # window yields <60 s usable footage (camera warmup alone
-                # costs ~2 s) → always "low". Count only quality-accepted
-                # time like the Rust monitor (session pauses when your face
-                # leaves view), + 2 s slack so --window-s 60 meets the floor.
+                # Count only quality-accepted time like the Rust monitor (the
+                # session pauses when your face leaves view), + 2 s slack —
+                # camera warmup isn't footage. Confidence floors scale to
+                # --window-s, so the +2 s is headroom, not a floor hack.
                 usable_target = window_ms + 2_000.0
                 usable_ms = 0.0
                 last_t = time.perf_counter()
@@ -318,7 +323,7 @@ def cmd_monitor(args) -> int:
                     print(f"  camera error: {e}", file=sys.stderr)
                     next_window_at = _now_ms() + interval_ms
                     continue
-                r = agg.result("monitor")
+                r = agg.result("monitor", args.window_s * 1000.0)
                 state["lastWindowResult"] = None
                 if r["confidence"] != "low":
                     # Score vs pre-update baseline → learn → save (app order).

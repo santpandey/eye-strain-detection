@@ -58,6 +58,26 @@ describe('assessConfidence', () => {
     const r = assessConfidence({ ...good, discardPct: 55, candidateCount: 3 });
     expect(r.confidence).not.toBe('low');
   });
+  it('scales the usable-footage floor to a shorter planned target', () => {
+    // The 60 s monitor window case: the absolute 80 s floor was unreachable.
+    const r = assessConfidence({ ...good, qualityMs: 62_000, targetMs: 60_000 });
+    expect(r.confidence).toBe('high');
+    expect(r.reasons).toEqual([]);
+  });
+  it('cites the scaled floor when usable time falls short of it', () => {
+    const r = assessConfidence({ ...good, qualityMs: 58_000, targetMs: 60_000 });
+    expect(r.confidence).toBe('low');
+    expect(r.reasons.some((x) => x.text.includes('60 s+ recommended'))).toBe(true);
+  });
+  it('keeps the absolute floors for fixed-length input (targetMs 0/omitted)', () => {
+    const r = assessConfidence({ ...good, qualityMs: 62_000 });
+    expect(r.confidence).toBe('medium');
+    expect(r.reasons.some((x) => x.text.includes('80 s+ recommended'))).toBe(true);
+  });
+  it('scales the medium floor — a sub-60 s target can still reach high', () => {
+    const r = assessConfidence({ ...good, qualityMs: 45_000, targetMs: 45_000 });
+    expect(r.confidence).toBe('high');
+  });
 });
 
 describe('per-metric minimums (na)', () => {

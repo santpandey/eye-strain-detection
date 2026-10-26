@@ -247,7 +247,7 @@
 
   async function finish() {
     if (!agg) return;
-    const r = agg.result('camera');
+    const r = agg.result('camera', CAPTURE_MS);
     result = r;
     if (dev) stashTrace(r);
     if (r.confidence === 'low') {

@@ -135,7 +135,7 @@ export class QuickCheckAggregator {
     return s.length ? s.reduce((a, b) => a + b, 0) / s.length : 0;
   }
 
-  result(source: 'camera' | 'file' | 'monitor' = 'camera'): QuickCheckResult {
+  result(source: 'camera' | 'file' | 'monitor' = 'camera', targetMs = 0): QuickCheckResult {
     const d = this.detector;
     d.finish();
     const events = d.events;
@@ -187,6 +187,7 @@ export class QuickCheckAggregator {
       backlitPct,
       discardPct: d.discardPct,
       candidateCount: d.candidateCount,
+      targetMs,
     });
     return {
       schemaVersion: 2,
@@ -213,16 +214,25 @@ interface ConfidenceInput {
   backlitPct: number;
   discardPct: number;
   candidateCount: number;
+  /** Planned usable-time target for this capture (e.g. CFG.captureMs, a
+   * monitor window's --window-s). 0 = fixed-length input — absolute floors. */
+  targetMs?: number;
 }
 
 export function assessConfidence(i: ConfidenceInput): {
   confidence: Confidence;
   reasons: ConfidenceReason[];
 } {
+  // The usable-footage floors scale to the planned capture length: a 60 s
+  // monitor window can never reach the absolute 80 s floor, so the bar
+  // becomes "as much usable time as this window could yield".
+  const scale = (floor: number) => (i.targetMs && i.targetMs > 0 ? Math.min(floor, i.targetMs) : floor);
+  const highMs = scale(CFG.confHighQualityMs);
+  const medMs = scale(CFG.confMedQualityMs);
   const reasons: ConfidenceReason[] = [];
-  if (i.qualityMs < CFG.confHighQualityMs) {
+  if (i.qualityMs < highMs) {
     reasons.push({
-      text: `Only ${Math.round(i.qualityMs / 1000)} s of usable footage (${Math.round(CFG.confHighQualityMs / 1000)} s+ recommended)`,
+      text: `Only ${Math.round(i.qualityMs / 1000)} s of usable footage (${Math.round(highMs / 1000)} s+ recommended)`,
       fix: 'Keep your face in frame and well lit for the whole check.',
     });
   }
@@ -267,7 +277,7 @@ export function assessConfidence(i: ConfidenceInput): {
   if (discardAbstain) return { confidence: 'low', reasons };
 
   const medium =
-    i.qualityMs >= CFG.confMedQualityMs &&
+    i.qualityMs >= medMs &&
     i.qualityPct >= CFG.confMedQualityPct &&
     i.fpsMean >= CFG.confMedFps;
   return { confidence: medium ? 'medium' : 'low', reasons };
