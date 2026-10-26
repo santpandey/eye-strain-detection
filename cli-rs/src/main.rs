@@ -1545,7 +1545,8 @@ fn cmd_update(json: bool) -> Result<()> {
         .any(|d| d.join("pyvenv.cfg").exists());
     if near_python {
         say("blinkwell: this install came via a Python package manager — run:");
-        say("    pipx upgrade blinkwell    # pipx installs");
+        say("    uv tool upgrade blinkwell   # uv/pipx-style installs");
+        say("    pipx upgrade blinkwell      # pipx installs");
         say("    # uvx always fetches the latest version automatically");
         return Ok(());
     }
@@ -1614,8 +1615,59 @@ fn cmd_update(json: bool) -> Result<()> {
         return Err(e).with_context(|| format!("can't install to {}", exe.display()));
     }
     let _ = fs::remove_dir_all(&dir);
-    say(&format!(
-        "blinkwell updated to v{tag} — restart it to use the new version"
-    ));
+    // The binary was swapped in place, so the next invocation — in this same
+    // shell — already runs the new version. The only thing "restart" applies
+    // to is a monitor process still holding the old image in memory.
+    if blinkwell_still_running() {
+        say(&format!(
+            "blinkwell updated to v{tag} — a monitor is still running v{cur}; \
+             restart it to pick up the new version"
+        ));
+    } else {
+        say(&format!(
+            "blinkwell updated to v{tag} — the next `blinkwell` in this shell already uses it"
+        ));
+    }
     Ok(())
+}
+
+/// True if another blinkwell process (e.g. a `monitor` loop or a live
+/// `__window` child) is still alive — those keep executing the pre-update
+/// binary until they exit.
+fn blinkwell_still_running() -> bool {
+    let me = std::process::id();
+    #[cfg(unix)]
+    {
+        // Match on the process name (comm), not the full cmdline — a shell
+        // whose arguments merely mention blinkwell must not false-positive.
+        let Ok(out) = std::process::Command::new("pgrep")
+            .arg("blinkwell")
+            .output()
+        else {
+            return false;
+        };
+        String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .any(|l| l.trim().parse::<u32>().is_ok_and(|pid| pid != me))
+    }
+    #[cfg(windows)]
+    {
+        let Ok(out) = std::process::Command::new("tasklist")
+            .args(["/FI", "IMAGENAME eq blinkwell.exe", "/FO", "CSV", "/NH"])
+            .output()
+        else {
+            return false;
+        };
+        String::from_utf8_lossy(&out.stdout).lines().any(|l| {
+            l.split(',')
+                .nth(1)
+                .and_then(|p| p.trim_matches('"').parse::<u32>().ok())
+                .is_some_and(|pid| pid != me)
+        })
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = me;
+        false
+    }
 }

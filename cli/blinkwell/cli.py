@@ -487,6 +487,7 @@ def main(argv=None) -> int:
     # entrypoint — self-swapping a launcher exe would corrupt the venv.
     def _update(args):
         print("blinkwell: this install is managed by your package manager — run:")
+        print("    uv tool upgrade blinkwell   # if installed via uv")
         print("    pipx upgrade blinkwell      # if installed via pipx")
         print("    pip install -U blinkwell    # if installed via pip")
         print("(uvx always fetches the latest version automatically)")
