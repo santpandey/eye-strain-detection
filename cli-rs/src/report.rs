@@ -47,11 +47,21 @@ pub fn build_report() -> Result<PathBuf> {
         })
         .collect();
     let data = serde_json::to_string(&rows).context("serialize history")?;
-    let html = TEMPLATE.replace("__DATA__", &data).replace(
-        "__GEN__",
-        &chrono::Local::now().format("%Y-%m-%d %H:%M").to_string(),
-    );
+    let hist = crate::storage::data_dir()
+        .join("history.jsonl")
+        .display()
+        .to_string();
+    let html = TEMPLATE
+        .replace("__DATA__", &data)
+        .replace("__HIST__", &hist)
+        .replace(
+            "__GEN__",
+            &chrono::Local::now().format("%Y-%m-%d %H:%M").to_string(),
+        );
     let path = crate::storage::data_dir().join("report.html");
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
+    }
     std::fs::write(&path, html).with_context(|| format!("write {}", path.display()))?;
     Ok(path)
 }
