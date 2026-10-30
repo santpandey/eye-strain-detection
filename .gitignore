@@ -9,7 +9,8 @@ e2e/screenshots/
 eval-data/
 test-results/
 playwright-report/
-.devin/
+.devin/config.local.json
+.devin/mcp_config.local.json
 cli/.venv/
 __pycache__/
 cli/**/__pycache__/

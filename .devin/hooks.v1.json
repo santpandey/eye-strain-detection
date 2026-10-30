@@ -1,0 +1,13 @@
+{
+  "PostToolUse": [
+    {
+      "matcher": "^(edit|write)$",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "sh .devin/hooks/parity-reminder.sh"
+        }
+      ]
+    }
+  ]
+}
