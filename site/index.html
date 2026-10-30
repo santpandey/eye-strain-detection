@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<script>try{var t=localStorage.getItem('blinkwell.theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
+<script>if('IntersectionObserver' in window)document.documentElement.classList.add('js');try{var t=localStorage.getItem('blinkwell.theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
 <title>blinkwell — on-device eye fatigue monitor</title>
 <meta name="description" content="blinkwell watches for eye fatigue while you work — periodic 60-second camera windows, fully on-device. No uploads, no accounts.">
 <meta property="og:title" content="blinkwell — on-device eye fatigue monitor">
@@ -153,6 +153,32 @@ h2{font-size:12px;letter-spacing:.15em;text-transform:uppercase;color:var(--mut)
 .faq code{font:11.5px var(--mono);background:var(--acc-soft);border:1px solid var(--acc-line);
   border-radius:4px;padding:0 5px;white-space:nowrap}
 
+.ticker{overflow:hidden;margin:44px 0 4px;padding:9px 0;
+  border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);
+  mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent)}
+.tk{display:flex;gap:38px;width:max-content;animation:tick 32s linear infinite}
+.tk span{font:10.5px var(--mono);letter-spacing:.15em;text-transform:uppercase;color:var(--mut);white-space:nowrap}
+@keyframes tick{to{transform:translateX(-50%)}}
+
+@media (prefers-reduced-motion: no-preference){
+  html{scroll-behavior:smooth}
+  html.js .rv{opacity:0;transform:translateY(16px);
+    transition:opacity .55s ease,transform .55s cubic-bezier(.2,.8,.3,1)}
+  html.js .rv-l{transform:translateX(-24px)}
+  html.js .rv-r{transform:translateX(24px)}
+  html.js .rv.in{opacity:1;transform:none}
+  html.js .sig .wave{stroke-dasharray:var(--wlen,none);stroke-dashoffset:var(--wlen,0);
+    transition:stroke-dashoffset 1.8s cubic-bezier(.4,0,.2,1) .15s}
+  html.js .sig.in .wave{stroke-dashoffset:0}
+  html.js .sig .blip{transform:scale(0);transform-box:fill-box;transform-origin:center;
+    transition:transform .28s cubic-bezier(.34,1.4,.64,1)}
+  html.js .sig.in .blip{transform:scale(1)}
+  html.js .sig .gap,html.js .sig .gaplab{opacity:0;transition:opacity .6s ease 1.6s}
+  html.js .sig.in .gap,html.js .sig.in .gaplab{opacity:1}
+}
+@media (prefers-reduced-motion: reduce){.tk{animation:none}}
+
 footer{padding:36px 0 48px;border-top:1px solid var(--line);margin-top:52px;font-size:12.5px;color:var(--mut);display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px}
 </style>
 </head>
@@ -197,26 +223,31 @@ footer{padding:36px 0 48px;border-top:1px solid var(--line);margin-top:52px;font
   </div>
 
   <div class="tiles">
-    <div class="tile hl"><span class="k">Frames uploaded</span><span class="v">0</span><span class="d">everything runs on-device</span></div>
-    <div class="tile"><span class="k">Camera on</span><span class="v">~10<small>%</small></span><span class="d">60 s window every 10 min — LED off between</span></div>
-    <div class="tile"><span class="k">Binary size</span><span class="v">7<small> MB</small></span><span class="d">single file, model embedded</span></div>
-    <div class="tile"><span class="k">Fatigue signals</span><span class="v">8</span><span class="d">blink dynamics · eyelids · partials · distance · lighting</span></div>
-    <div class="tile"><span class="k">Personal baseline</span><span class="v">3</span><span class="d">checks until scores are vs. <i>your</i> usual</span></div>
-    <div class="tile"><span class="k">Platforms</span><span class="v">3</span><span class="d">Windows · macOS (Apple Silicon) · Linux</span></div>
+    <div class="tile hl rv"><span class="k">Frames uploaded</span><span class="v">0</span><span class="d">everything runs on-device</span></div>
+    <div class="tile rv"><span class="k">Camera on</span><span class="v">~10<small>%</small></span><span class="d">60 s window every 10 min — LED off between</span></div>
+    <div class="tile rv"><span class="k">Binary size</span><span class="v">7<small> MB</small></span><span class="d">single file, model embedded</span></div>
+    <div class="tile rv"><span class="k">Fatigue signals</span><span class="v">8</span><span class="d">blink dynamics · eyelids · partials · distance · lighting</span></div>
+    <div class="tile rv"><span class="k">Personal baseline</span><span class="v">3</span><span class="d">checks until scores are vs. <i>your</i> usual</span></div>
+    <div class="tile rv"><span class="k">Platforms</span><span class="v">3</span><span class="d">Windows · macOS (Apple Silicon) · Linux</span></div>
   </div>
 </div>
+
+<div class="ticker" aria-hidden="true"><div class="tk">
+  <span>blink rate</span><span>PERCLOS</span><span>blink duration</span><span>partial blinks</span><span>lid reopen</span><span>longest gap</span><span>screen distance</span><span>fatigue score</span><span>personal baseline</span><span>confidence</span>
+  <span>blink rate</span><span>PERCLOS</span><span>blink duration</span><span>partial blinks</span><span>lid reopen</span><span>longest gap</span><span>screen distance</span><span>fatigue score</span><span>personal baseline</span><span>confidence</span>
+</div></div>
 
 <section id="how">
   <h2>How it works</h2>
   <div class="steps">
-    <div class="step"><div class="n">01</div><h3>Periodic windows</h3>
+    <div class="step rv rv-l"><div class="n">01</div><h3>Periodic windows</h3>
       <p>The camera opens for ~60 s every ~10 min — never continuously, and fully
       released between windows. Your webcam LED is the honest signal.</p></div>
-    <div class="step"><div class="n">02</div><h3>478 landmarks, on-device</h3>
+    <div class="step rv"><div class="n">02</div><h3>478 landmarks, on-device</h3>
       <p>MediaPipe Face Landmarker runs locally; frames are processed in memory
       and discarded instantly. Look away mid-check and the clock pauses — only
       aligned time counts.</p></div>
-    <div class="step"><div class="n">03</div><h3>Acts, not just measures</h3>
+    <div class="step rv rv-r"><div class="n">03</div><h3>Acts, not just measures</h3>
       <p>When fatigue signals rise vs. your baseline, blinkwell suggests a 20-20-20
       break, palming, or full-blink exercises — timed, guided, optional.</p></div>
   </div>
@@ -224,7 +255,7 @@ footer{padding:36px 0 48px;border-top:1px solid var(--line);margin-top:52px;font
 
 <section id="signal">
   <h2>What a window sees</h2>
-  <div class="sig">
+  <div class="sig rv">
     <svg viewBox="0 0 720 196" role="img"
          aria-label="Illustrative eyelid-closure signal over a 60-second window: regular blink dips, then a 20-second blink-free gap, then blinks resume">
       <!-- horizontal guides: eyelid closure 0.25 / 0.5 / 0.75 -->
@@ -278,7 +309,7 @@ footer{padding:36px 0 48px;border-top:1px solid var(--line);margin-top:52px;font
 
 <section id="commands">
   <h2>Commands</h2>
-  <div class="cmds">
+  <div class="cmds rv">
     <div class="row"><code>blinkwell</code><span>just this — it asks once, then monitors: ~60 seconds every ~10 minutes (adjustable)</span></div>
     <div class="row"><code>blinkwell --once</code><span>a single guided check right now, then exits</span></div>
     <div class="row"><code>blinkwell history</code><span>shows your past checks and trends in the terminal</span></div>
@@ -290,18 +321,18 @@ footer{padding:36px 0 48px;border-top:1px solid var(--line);margin-top:52px;font
 <section id="privacy">
   <h2>Privacy, by construction</h2>
   <div class="priv">
-    <div class="pitem"><b>No frames leave the device.</b>Zero network calls for
+    <div class="pitem rv"><b>No frames leave the device.</b>Zero network calls for
     video. The only file written is a <code>history.jsonl</code> in your home
     folder — one line of numbers per check.</div>
-    <div class="pitem"><b>Camera is on ~10% of the time.</b>It's opened per window
+    <div class="pitem rv"><b>Camera is on ~10% of the time.</b>It's opened per window
     and released immediately — the LED can never silently stay on.</div>
-    <div class="pitem"><b>No accounts, no sync.</b>Your baseline and history live
+    <div class="pitem rv"><b>No accounts, no sync.</b>Your baseline and history live
     in your home directory. Delete the folder, everything is gone.</div>
-    <div class="pitem"><b>One honest caveat.</b>The MediaPipe engine may send
+    <div class="pitem rv"><b>One honest caveat.</b>The MediaPipe engine may send
     Google anonymous counters — like which feature ran and how long it took.
     Your camera frames and results are never sent — they never leave the
     device.</div>
-    <div class="pitem"><b>Wellness tool, not a diagnosis.</b>blinkwell nudges better
+    <div class="pitem rv"><b>Wellness tool, not a diagnosis.</b>blinkwell nudges better
     habits; it doesn't detect disease. Persistent symptoms → see a clinician.</div>
   </div>
 </section>
@@ -309,19 +340,19 @@ footer{padding:36px 0 48px;border-top:1px solid var(--line);margin-top:52px;font
 <section id="faq">
   <h2>Common questions</h2>
   <div class="faq">
-    <div class="q">
+    <div class="q rv">
       <h3>Does it record or upload video of me?</h3>
       <p>No. Frames are analyzed in memory and discarded the instant they're
       measured — nothing is uploaded, nothing is saved. What remains is one
       line of numbers per check.</p>
     </div>
-    <div class="q">
+    <div class="q rv">
       <h3>Is the camera on all the time?</h3>
       <p>No — about 60 seconds every 10 minutes. The camera opens for the
       check and is released right after; your camera's indicator light shows
       you exactly when it's live.</p>
     </div>
-    <div class="q">
+    <div class="q rv">
       <h3>Where is my data stored — and how do I delete it?</h3>
       <p>Everything lives in one folder in your home directory:
       <code>~/.blinkwell</code> on Mac and Linux,
@@ -329,12 +360,12 @@ footer{padding:36px 0 48px;border-top:1px solid var(--line);margin-top:52px;font
       your whole history is gone — there's no account and nothing on a server
       to clean up.</p>
     </div>
-    <div class="q">
+    <div class="q rv">
       <h3>What does it cost? Do I need an account?</h3>
       <p>Free and open-source (MIT). No account, no email, no sign-up —
       install and run.</p>
     </div>
-    <div class="q">
+    <div class="q rv">
       <h3>Will it work on my computer?</h3>
       <p>Yes — Windows (x64 and ARM64), Apple-Silicon Macs and Linux x86_64
       get the native app; Intel Macs and Linux ARM run the same program
@@ -404,6 +435,37 @@ document.getElementById('copybtn').onclick = function () {
   var b = this; setTimeout(function () { b.textContent = 'COPY'; }, 1400);
 };
 document.getElementById('ghlink').href = 'https://github.com/santpandey/eye-strain-detection';
+
+// Reveal-on-scroll: .rv elements slide+fade in once, when they enter the
+// viewport. The hidden state only exists under html.js + no-preference, so
+// no-JS / reduced-motion / old browsers just see the page. Siblings within
+// one parent get a progressive transition-delay for the cascade.
+if ('IntersectionObserver' in window) {
+  document.querySelectorAll('.rv').forEach(function (el) {
+    var i = Array.prototype.indexOf.call(el.parentElement.children, el);
+    if (i > 0) el.style.transitionDelay = Math.min(i * 70, 350) + 'ms';
+  });
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (en) {
+      if (!en.isIntersecting) return;
+      en.target.classList.add('in');
+      setTimeout(function () { en.target.style.transitionDelay = ''; }, 950);
+      io.unobserve(en.target);
+    });
+  }, { threshold: 0.12, rootMargin: '0px 0px -6% 0px' });
+  document.querySelectorAll('.rv').forEach(function (el) { io.observe(el); });
+
+  // The waveform draws itself: dash-offset the full path length, then each
+  // blink dot pops as the line passes its x position.
+  var wpath = document.querySelector('.sig .wave');
+  if (wpath) {
+    wpath.closest('.sig').style.setProperty('--wlen', wpath.getTotalLength() + 'px');
+    document.querySelectorAll('.sig .blip').forEach(function (c) {
+      var frac = (+c.getAttribute('cx') - 44) / 660;
+      c.style.transitionDelay = (0.25 + frac * 1.7) + 's';
+    });
+  }
+}
 </script>
 </body>
 </html>
